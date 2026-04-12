@@ -25,6 +25,9 @@
             <div class="d-flex align-items-center gap-2 ms-auto">
                 <span class="badge rounded-pill text-bg-light border">{{ role_label|default:'Guest Viewer' }}</span>
                 {% if user.is_authenticated %}
+                    <span class="badge rounded-pill text-bg-dark">
+                        <i class="bi bi-person-circle me-1"></i>{{ user.username }}
+                    </span>
                     <a href="{% url 'violations:logout' %}" class="btn btn-outline-secondary btn-sm">Logout</a>
                 {% else %}
                     <a href="{% url 'violations:login' %}" class="btn btn-outline-dark btn-sm">Admin Login</a>
