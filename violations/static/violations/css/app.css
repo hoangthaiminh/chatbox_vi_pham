@@ -178,6 +178,16 @@ body {
     font-weight: 600;
 }
 
+.app-toast-container {
+    z-index: 1200;
+}
+
+.app-toast {
+    min-width: 18rem;
+    max-width: min(92vw, 24rem);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+}
+
 @media (max-width: 992px) {
     .candidate-offcanvas {
         width: 100vw !important;
