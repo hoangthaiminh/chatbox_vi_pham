@@ -6,6 +6,7 @@ app_name = "violations"
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
+    path("statistics/", views.statistics, name="statistics"),
     path("login/", views.login_view, name="login"),
     path("logout/", views.logout_view, name="logout"),
     path("incidents/create/", views.create_incident, name="create_incident"),

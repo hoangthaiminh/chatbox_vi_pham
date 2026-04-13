@@ -94,10 +94,27 @@ def get_dashboard_context(request):
     }
 
 
+def get_statistics_context(request):
+    candidate_stats, unknown_stats = build_candidate_stats()
+    return {
+        "candidate_stats": candidate_stats,
+        "unknown_stats": unknown_stats,
+        "import_form": CandidateImportForm(),
+        "can_import_candidates": is_super_admin(request.user),
+        "role_label": role_label(request.user),
+    }
+
+
 @require_GET
 def dashboard(request):
     context = get_dashboard_context(request)
     return render(request, "violations/dashboard.html", context)
+
+
+@require_GET
+def statistics(request):
+    context = get_statistics_context(request)
+    return render(request, "violations/statistics.html", context)
 
 
 @require_POST
