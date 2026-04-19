@@ -214,14 +214,58 @@ body {
 .evidence-wrap img,
 .evidence-wrap video {
     display: block;
-    width: auto;
+    width: 100%;
     max-width: 100%;
-    height: auto;
-    max-height: 280px;
+    height: 100%;
+    max-height: 100%;
     object-fit: contain;
     cursor: zoom-in;
     user-select: none;
     -webkit-user-drag: none;
+}
+
+.evidence-wrap {
+    position: relative;
+    width: min(100%, calc(var(--evidence-natural-w, 420) * 1px));
+    aspect-ratio: var(--evidence-ar, 4 / 3);
+    max-height: 280px;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background: #eef2f0;
+}
+
+.evidence-wrap::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, #dfe7e3 8%, #f7faf8 28%, #dfe7e3 48%);
+    background-size: 220% 100%;
+    opacity: 0;
+    transition: opacity 140ms ease-out;
+    pointer-events: none;
+}
+
+.evidence-wrap-loading::before {
+    opacity: 1;
+    animation: evidenceShimmer 1.05s linear infinite;
+}
+
+.evidence-wrap .evidence-media {
+    opacity: 1;
+    transition: opacity 180ms ease-out;
+}
+
+.evidence-wrap-loading .evidence-media {
+    opacity: 0;
+}
+
+@keyframes evidenceShimmer {
+    0% {
+        background-position: 100% 0;
+    }
+    100% {
+        background-position: -120% 0;
+    }
 }
 
 .candidate-detail-shell img,

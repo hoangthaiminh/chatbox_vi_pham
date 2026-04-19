@@ -42,6 +42,71 @@
         });
     }
 
+    function isEvidenceMediaReady(mediaEl) {
+        if (!mediaEl) {
+            return true;
+        }
+        if (mediaEl.tagName === "IMG") {
+            return mediaEl.complete && mediaEl.naturalWidth > 0;
+        }
+        if (mediaEl.tagName === "VIDEO") {
+            return mediaEl.readyState >= 1;
+        }
+        return true;
+    }
+
+    function applyEvidenceIntrinsicMetrics(wrapEl, mediaEl) {
+        if (!wrapEl || !mediaEl) {
+            return;
+        }
+
+        let width = null;
+        let height = null;
+
+        if (mediaEl.tagName === "IMG") {
+            width = mediaEl.naturalWidth || null;
+            height = mediaEl.naturalHeight || null;
+        } else if (mediaEl.tagName === "VIDEO") {
+            width = mediaEl.videoWidth || null;
+            height = mediaEl.videoHeight || null;
+        }
+
+        if (width && height) {
+            wrapEl.style.setProperty("--evidence-natural-w", String(width));
+            wrapEl.style.setProperty("--evidence-ar", `${width} / ${height}`);
+        }
+    }
+
+    function bindEvidencePlaceholders(scope) {
+        const root = scope || document;
+        root.querySelectorAll(".evidence-wrap").forEach((wrapEl) => {
+            const mediaEl = wrapEl.querySelector(".js-evidence-media");
+            if (!mediaEl) {
+                wrapEl.classList.remove("evidence-wrap-loading");
+                return;
+            }
+
+            const revealMedia = () => {
+                applyEvidenceIntrinsicMetrics(wrapEl, mediaEl);
+                wrapEl.classList.remove("evidence-wrap-loading");
+            };
+
+            if (isEvidenceMediaReady(mediaEl)) {
+                revealMedia();
+                return;
+            }
+
+            if (mediaEl.dataset.placeholderBound === "1") {
+                return;
+            }
+
+            mediaEl.dataset.placeholderBound = "1";
+            const readyEvent = mediaEl.tagName === "VIDEO" ? "loadedmetadata" : "load";
+            mediaEl.addEventListener(readyEvent, revealMedia, { once: true });
+            mediaEl.addEventListener("error", revealMedia, { once: true });
+        });
+    }
+
     function blockClipboardForEvidence() {
         document.addEventListener("copy", (event) => {
             const activeEvidence = document.activeElement && document.activeElement.closest(".evidence-wrap, .candidate-detail-shell");
@@ -182,6 +247,7 @@
         const previousTop = window.scrollY;
         nodes.forEach((node) => incidentListContainer.prepend(node));
         bindEvidenceGuards(incidentListContainer);
+        nodes.forEach((node) => bindEvidencePlaceholders(node));
         const heightDelta = doc.scrollHeight - previousHeight;
         instantScrollTo(previousTop + heightDelta);
         return nodes.length;
@@ -200,6 +266,7 @@
         removeEmptyState();
         nodes.forEach((node) => incidentListContainer.append(node));
         bindEvidenceGuards(incidentListContainer);
+        nodes.forEach((node) => bindEvidencePlaceholders(node));
         return nodes.length;
     }
 
@@ -417,6 +484,7 @@
             }
             detailContent.innerHTML = await response.text();
             bindEvidenceGuards(detailContent);
+            bindEvidencePlaceholders(detailContent);
         } catch (error) {
             detailContent.innerHTML = '<div class="alert alert-danger">Could not load candidate details.</div>';
         }
@@ -464,6 +532,7 @@
     });
 
     bindEvidenceGuards(document);
+    bindEvidencePlaceholders(document);
     blockClipboardForEvidence();
     syncComposerOffset();
 

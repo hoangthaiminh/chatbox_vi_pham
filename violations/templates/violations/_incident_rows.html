@@ -38,12 +38,17 @@
             </div>
 
             {% if incident.evidence %}
-                <div class="mt-3 evidence-wrap">
+                <div
+                    class="mt-3 evidence-wrap evidence-wrap-loading"
+                    style="--evidence-ar: {{ incident.evidence_aspect_ratio }}; --evidence-natural-w: {{ incident.evidence_natural_width }};"
+                >
                     {% if incident.evidence_is_image %}
                         <img
                             src="{% url 'violations:incident_evidence' incident.pk %}"
-                            class="img-fluid rounded shadow-sm evidence-guard js-evidence-preview"
+                            class="img-fluid rounded shadow-sm evidence-media evidence-guard js-evidence-media js-evidence-preview"
                             alt="Evidence"
+                            width="{{ incident.evidence_width|default:'4' }}"
+                            height="{{ incident.evidence_height|default:'3' }}"
                             draggable="false"
                             loading="lazy"
                             data-kind="image"
@@ -51,7 +56,7 @@
                         >
                     {% elif incident.evidence_is_video %}
                         <video
-                            class="w-100 rounded shadow-sm evidence-guard js-evidence-preview"
+                            class="w-100 rounded shadow-sm evidence-media evidence-guard js-evidence-media js-evidence-preview"
                             controls
                             controlsList="nodownload noplaybackrate"
                             disablePictureInPicture
