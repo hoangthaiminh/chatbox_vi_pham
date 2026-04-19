@@ -4,10 +4,13 @@ from django import forms
 
 from .services import MAX_SBD_LENGTH, MAX_VIOLATION_TEXT_LEN, is_valid_sbd_syntax
 
-# Images are now embedded via Markdown; evidence field is video-only
+ALLOWED_IMAGE_EXTENSIONS = {
+    ".jpg", ".jpeg", ".png", ".gif", ".webp",
+}
 ALLOWED_VIDEO_EXTENSIONS = {
     ".mp4", ".mov", ".webm", ".mkv", ".avi",
 }
+MAX_IMAGE_SIZE = 20 * 1024 * 1024   # 20 MB
 MAX_VIDEO_SIZE = 200 * 1024 * 1024  # 200 MB
 
 
@@ -19,7 +22,7 @@ class IncidentBaseForm(forms.Form):
         max_length=MAX_VIOLATION_TEXT_LEN,
         strip=True,
     )
-    evidence = forms.FileField(label="Video Evidence", required=False)
+    evidence = forms.FileField(label="Evidence (Image or Video)", required=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -53,13 +56,19 @@ class IncidentBaseForm(forms.Form):
         if not evidence:
             return evidence
         extension = Path(evidence.name).suffix.lower()
-        if extension not in ALLOWED_VIDEO_EXTENSIONS:
-            raise forms.ValidationError(
-                "Chỉ chấp nhận file video (mp4, mov, webm, mkv, avi)."
-            )
-        if evidence.size > MAX_VIDEO_SIZE:
-            raise forms.ValidationError("Video file phải ≤ 200 MB.")
-        return evidence
+        if extension in ALLOWED_IMAGE_EXTENSIONS:
+            if evidence.size > MAX_IMAGE_SIZE:
+                raise forms.ValidationError("File ảnh phải ≤ 20 MB.")
+            return evidence
+
+        if extension in ALLOWED_VIDEO_EXTENSIONS:
+            if evidence.size > MAX_VIDEO_SIZE:
+                raise forms.ValidationError("Video file phải ≤ 200 MB.")
+            return evidence
+
+        raise forms.ValidationError(
+            "Chỉ chấp nhận file ảnh/video (jpg, jpeg, png, gif, webp, mp4, mov, webm, mkv, avi)."
+        )
 
 
 class IncidentCreateForm(IncidentBaseForm):
@@ -67,7 +76,7 @@ class IncidentCreateForm(IncidentBaseForm):
 
 
 class IncidentEditForm(IncidentBaseForm):
-    remove_evidence = forms.BooleanField(required=False, label="Remove existing video")
+    remove_evidence = forms.BooleanField(required=False, label="Remove existing evidence")
 
 
 class CandidateImportForm(forms.Form):

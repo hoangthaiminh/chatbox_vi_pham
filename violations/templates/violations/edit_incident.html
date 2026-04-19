@@ -72,17 +72,17 @@
 
                     <div class="col-md-8">
                         <label for="id_evidence" class="form-label">
-                            <i class="bi bi-camera-video me-1"></i>Replace Video (optional)
+                            <i class="bi bi-paperclip me-1"></i>Replace Evidence (optional)
                         </label>
                         <input type="file" name="evidence" id="id_evidence"
-                               class="form-control" accept="video/*">
+                               class="form-control" accept="image/*,video/*">
                     </div>
                     <div class="col-md-4 d-flex align-items-end">
                         <div class="form-check">
                             <input type="checkbox" name="remove_evidence" id="id_remove_evidence"
                                    class="form-check-input"
                                    {% if form.remove_evidence.value %}checked{% endif %}>
-                            <label class="form-check-label" for="id_remove_evidence">Remove existing video</label>
+                            <label class="form-check-label" for="id_remove_evidence">Remove existing evidence</label>
                         </div>
                     </div>
 

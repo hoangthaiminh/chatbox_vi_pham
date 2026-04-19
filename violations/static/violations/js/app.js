@@ -20,6 +20,7 @@
     let loadingUpdates = false;
     let sendingComposer = false;
     let setComposeExpanded = null;
+    let refreshComposeEvidenceIndicator = null;
 
     const PREVIEW_URL = "/incidents/preview/";
     const UPLOAD_URL = "/incidents/upload-image/";
@@ -43,6 +44,13 @@
 
     function setComposerSubmittingState(isSubmitting) {
         if (composerSubmitButton) composerSubmitButton.disabled = isSubmitting;
+    }
+
+    function formatFileSize(bytes) {
+        if (!Number.isFinite(bytes) || bytes <= 0) return "";
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     }
 
     function getCsrfToken() {
@@ -260,6 +268,25 @@
         return Array.from(wrapper.children).filter((node) => !node.classList.contains("empty-state"));
     }
 
+    function getNodeIncidentId(node) {
+        if (!node || node.nodeType !== 1) return null;
+        if (node.matches(".chat-row[data-incident-id]")) {
+            return parseId(node.dataset.incidentId);
+        }
+        const row = node.querySelector(".chat-row[data-incident-id]");
+        return row ? parseId(row.dataset.incidentId) : null;
+    }
+
+    function filterOutExistingIncidentNodes(nodes) {
+        if (!incidentListContainer || !nodes.length) return nodes;
+
+        return nodes.filter((node) => {
+            const incidentId = getNodeIncidentId(node);
+            if (!Number.isFinite(incidentId)) return true;
+            return !incidentListContainer.querySelector(`.chat-row[data-incident-id='${incidentId}']`);
+        });
+    }
+
     function removeEmptyState() {
         if (!incidentListContainer) return;
         const emptyState = incidentListContainer.querySelector(".empty-state");
@@ -294,7 +321,7 @@
 
     function prependIncidents(html) {
         if (!incidentListContainer) return 0;
-        const nodes = htmlToNodes(html);
+        const nodes = filterOutExistingIncidentNodes(htmlToNodes(html));
         if (!nodes.length) return 0;
 
         removeEmptyState();
@@ -313,7 +340,7 @@
 
     function appendIncidents(html) {
         if (!incidentListContainer) return 0;
-        const nodes = htmlToNodes(html);
+        const nodes = filterOutExistingIncidentNodes(htmlToNodes(html));
         if (!nodes.length) return 0;
 
         removeEmptyState();
@@ -418,6 +445,9 @@
             }
 
             composerForm.reset();
+            if (typeof refreshComposeEvidenceIndicator === "function") {
+                refreshComposeEvidenceIndicator();
+            }
             if (payload && payload.incident_html) {
                 appendIncidents(payload.incident_html);
                 mergeStatsHtml(payload);
@@ -459,10 +489,14 @@
             }
 
             const incidentId = parseId(form.dataset.incidentId || payload.incident_id);
-            const row = Number.isFinite(incidentId)
-                ? incidentListContainer?.querySelector(`.chat-row[data-incident-id='${incidentId}']`)
-                : form.closest(".chat-row");
-            if (row) row.remove();
+            if (Number.isFinite(incidentId)) {
+                incidentListContainer
+                    ?.querySelectorAll(`.chat-row[data-incident-id='${incidentId}']`)
+                    .forEach((row) => row.remove());
+            } else {
+                const row = form.closest(".chat-row");
+                if (row) row.remove();
+            }
 
             recomputeIncidentBounds();
             ensureEmptyState();
@@ -676,6 +710,33 @@
         const expandBtn = document.getElementById("compose-expand-btn");
         const collapseBtn = document.getElementById("compose-collapse-btn");
         const expandedWrap = document.getElementById("compose-expanded");
+        const evidenceInput = document.getElementById("id_evidence");
+        const evidenceLabel = form.querySelector(".compose-video");
+        const evidenceName = document.getElementById("video-filename");
+
+        const updateEvidenceIndicator = () => {
+            if (!evidenceInput || !evidenceLabel || !evidenceName) return;
+            const file = evidenceInput.files && evidenceInput.files[0];
+            if (!file) {
+                evidenceLabel.classList.remove("has-file");
+                evidenceName.textContent = "";
+                evidenceName.title = "";
+                return;
+            }
+
+            const kind = file.type && file.type.startsWith("image/") ? "Image" : "File";
+            const sizeText = formatFileSize(file.size);
+            const info = sizeText ? `${kind}: ${file.name} (${sizeText})` : `${kind}: ${file.name}`;
+            evidenceLabel.classList.add("has-file");
+            evidenceName.textContent = info;
+            evidenceName.title = info;
+        };
+
+        refreshComposeEvidenceIndicator = updateEvidenceIndicator;
+        if (evidenceInput) {
+            evidenceInput.addEventListener("change", updateEvidenceIndicator);
+            updateEvidenceIndicator();
+        }
 
         const setExpanded = (expanded) => {
             if (!simpleInput || !fullTextarea || !isMarkdownField || !expandedWrap) return;
