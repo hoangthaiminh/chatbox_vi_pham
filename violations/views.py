@@ -12,7 +12,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST
 
 from .forms import CandidateImportForm, IncidentCreateForm, IncidentEditForm
-from .models import Candidate, Incident, IncidentParticipant
+from .models import Candidate, Incident
 from .realtime import (
     INCIDENT_PAGE_SIZE,
     INCIDENT_UPDATE_LIMIT,
@@ -41,6 +41,10 @@ def is_room_admin(user):
 
 def can_post_message(user):
     return is_super_admin(user) or is_room_admin(user)
+
+
+def is_ajax_request(request):
+    return request.headers.get("x-requested-with") == "XMLHttpRequest"
 
 
 def get_user_room_name(user):
@@ -121,10 +125,25 @@ def statistics(request):
 @login_required
 def create_incident(request):
     if not can_post_message(request.user):
+        if is_ajax_request(request):
+            return JsonResponse({"ok": False, "error": "You do not have permission to post incidents."}, status=403)
         return HttpResponseForbidden("You do not have permission to post incidents.")
 
     form = IncidentCreateForm(request.POST, request.FILES)
     if not form.is_valid():
+        if is_ajax_request(request):
+            error_text = "; ".join(
+                f"{field.replace('_', ' ').title()}: {', '.join(errors)}"
+                for field, errors in form.errors.items()
+            )
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": error_text or "Invalid incident data.",
+                    "errors": form.errors,
+                },
+                status=400,
+            )
         for field, errors in form.errors.items():
             label = field.replace("_", " ").title()
             for error in errors:
@@ -145,6 +164,9 @@ def create_incident(request):
         violation_text=form.cleaned_data["violation_text"],
     )
     notify_live_update()
+
+    if is_ajax_request(request):
+        return JsonResponse({"ok": True})
 
     messages.success(request, "Incident posted successfully.")
     return redirect("violations:dashboard")

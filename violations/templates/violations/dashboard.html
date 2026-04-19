@@ -1,16 +1,5 @@
 {% extends 'violations/base.html' %}
 
-{% block extra_head %}
-<script>
-    document.documentElement.classList.add("chat-preload");
-</script>
-<style>
-    html.chat-preload body {
-        visibility: hidden;
-    }
-</style>
-{% endblock %}
-
 {% block content %}
 <div class="chat-layout" id="monitor-tabs-content" data-ws-path="/ws/live/" data-history-url="{% url 'violations:incident_history' %}" data-updates-url="{% url 'violations:incident_updates' %}">
     <div class="live-header d-flex justify-content-between align-items-center mb-2">

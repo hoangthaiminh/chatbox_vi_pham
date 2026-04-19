@@ -1,9 +1,10 @@
 (function () {
     const monitorRoot = document.getElementById("monitor-tabs-content");
-    const incidentFeed = document.getElementById("incident-feed");
     const incidentTopStatus = document.getElementById("incident-top-status");
     const incidentListContainer = document.getElementById("incident-list-container");
     const composerDock = document.querySelector(".composer-dock");
+    const composerForm = document.querySelector(".composer-form");
+    const composerSubmitButton = composerForm ? composerForm.querySelector('button[type="submit"]') : null;
     const statsTableContainer = document.getElementById("stats-table-container");
     const liveConnectionStatus = document.getElementById("live-connection-status");
     const detailContent = document.getElementById("candidate-detail-content");
@@ -17,7 +18,7 @@
     let loadingOlder = false;
     let loadingUpdates = false;
     let hasInitializedBottomView = false;
-    let hasRevealedPreload = false;
+    let sendingComposer = false;
 
     if ("scrollRestoration" in history) {
         history.scrollRestoration = "manual";
@@ -73,6 +74,13 @@
         incidentTopStatus.textContent = text || "";
     }
 
+    function setComposerSubmittingState(isSubmitting) {
+        if (!composerSubmitButton) {
+            return;
+        }
+        composerSubmitButton.disabled = isSubmitting;
+    }
+
     function buildWebsocketUrl() {
         if (!monitorRoot) {
             return "";
@@ -118,14 +126,6 @@
         window.setTimeout(scrollToBottom, 80);
     }
 
-    function revealChatAfterPreload() {
-        if (hasRevealedPreload) {
-            return;
-        }
-        hasRevealedPreload = true;
-        document.documentElement.classList.remove("chat-preload");
-    }
-
     function initializeBottomView() {
         if (!incidentListContainer || hasInitializedBottomView) {
             return;
@@ -133,8 +133,13 @@
 
         hasInitializedBottomView = true;
         syncComposerOffset();
-        scrollToBottom();
-        revealChatAfterPreload();
+        forceScrollToBottom();
+        window.requestAnimationFrame(() => {
+            forceScrollToBottom();
+        });
+        window.setTimeout(() => {
+            forceScrollToBottom();
+        }, 180);
     }
 
     function syncComposerOffset() {
@@ -297,6 +302,46 @@
         }
     }
 
+    async function handleComposerSubmit(event) {
+        event.preventDefault();
+
+        if (!composerForm || sendingComposer) {
+            return;
+        }
+
+        sendingComposer = true;
+        setComposerSubmittingState(true);
+        updateTopStatus("");
+
+        try {
+            const response = await fetch(composerForm.action, {
+                method: "POST",
+                body: new FormData(composerForm),
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+            });
+
+            const contentType = response.headers.get("content-type") || "";
+            const payload = contentType.includes("application/json") ? await response.json() : null;
+
+            if (!response.ok || (payload && payload.ok === false)) {
+                const errorText = payload && payload.error ? payload.error : "Could not send message.";
+                updateTopStatus(errorText);
+                return;
+            }
+
+            composerForm.reset();
+            await loadNewMessages(true);
+            updateTopStatus("");
+        } catch (error) {
+            updateTopStatus("Could not send message.");
+        } finally {
+            sendingComposer = false;
+            setComposerSubmittingState(false);
+        }
+    }
+
     function connectLiveSocket() {
         if (!monitorRoot) {
             return;
@@ -435,6 +480,9 @@
     }
 
     if (monitorRoot) {
+        if (composerForm) {
+            composerForm.addEventListener("submit", handleComposerSubmit);
+        }
         if (incidentListContainer) {
             if (document.readyState === "complete") {
                 initializeBottomView();
@@ -442,8 +490,6 @@
                 window.addEventListener("load", initializeBottomView, { once: true });
                 window.setTimeout(initializeBottomView, 700);
             }
-        } else {
-            revealChatAfterPreload();
         }
         connectLiveSocket();
         document.addEventListener("visibilitychange", () => {

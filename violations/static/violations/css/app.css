@@ -21,10 +21,6 @@ body {
     position: relative;
 }
 
-html.chat-preload body {
-    visibility: hidden;
-}
-
 .bg-shape {
     position: fixed;
     width: 18rem;
