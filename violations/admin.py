@@ -4,50 +4,19 @@ from django.contrib.admin.sites import NotRegistered
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
-from django.contrib.auth.models import Group
 
 from .models import Candidate, Incident, IncidentParticipant, RoomAdminProfile
-
-ROLE_SUPER_ADMIN = "super_admin"
-ROLE_ROOM_ADMIN = "room_admin"
-ROLE_VIEWER = "viewer"
-ROLE_CHOICES = (
-    (ROLE_SUPER_ADMIN, "Super Admin"),
-    (ROLE_ROOM_ADMIN, "Room Admin"),
-    (ROLE_VIEWER, "Viewer"),
+from .services import (
+    ROLE_CHOICES,
+    ROLE_LABELS,
+    ROLE_ROOM_ADMIN,
+    ROLE_VIEWER,
+    apply_user_role,
+    detect_user_role,
+    ensure_valid_role_room,
 )
 
 User = get_user_model()
-
-
-def detect_user_role(user):
-    if user.groups.filter(name=ROLE_SUPER_ADMIN).exists():
-        return ROLE_SUPER_ADMIN
-    if user.groups.filter(name=ROLE_ROOM_ADMIN).exists():
-        return ROLE_ROOM_ADMIN
-    return ROLE_VIEWER
-
-
-def apply_user_role(user, role, room_name):
-    super_admin_group, _ = Group.objects.get_or_create(name=ROLE_SUPER_ADMIN)
-    room_admin_group, _ = Group.objects.get_or_create(name=ROLE_ROOM_ADMIN)
-
-    user.groups.remove(super_admin_group, room_admin_group)
-
-    if role == ROLE_SUPER_ADMIN:
-        user.groups.add(super_admin_group)
-        RoomAdminProfile.objects.filter(user=user).delete()
-        return
-
-    if role == ROLE_ROOM_ADMIN:
-        user.groups.add(room_admin_group)
-        RoomAdminProfile.objects.update_or_create(
-            user=user,
-            defaults={"room_name": room_name.strip()},
-        )
-        return
-
-    RoomAdminProfile.objects.filter(user=user).delete()
 
 
 class RoleAwareUserCreationForm(AdminUserCreationForm):
@@ -65,11 +34,10 @@ class RoleAwareUserCreationForm(AdminUserCreationForm):
     def clean(self):
         cleaned_data = super().clean()
         role = cleaned_data.get("role")
-        room_name = (cleaned_data.get("room_name") or "").strip()
-        cleaned_data["room_name"] = room_name
-
-        if role == ROLE_ROOM_ADMIN and not room_name:
-            self.add_error("room_name", "Room name is required for Room Admin.")
+        try:
+            cleaned_data["room_name"] = ensure_valid_role_room(role, cleaned_data.get("room_name"))
+        except ValueError as exc:
+            self.add_error("room_name", str(exc))
         return cleaned_data
 
 
@@ -97,11 +65,10 @@ class RoleAwareUserChangeForm(UserChangeForm):
     def clean(self):
         cleaned_data = super().clean()
         role = cleaned_data.get("role")
-        room_name = (cleaned_data.get("room_name") or "").strip()
-        cleaned_data["room_name"] = room_name
-
-        if role == ROLE_ROOM_ADMIN and not room_name:
-            self.add_error("room_name", "Room name is required for Room Admin.")
+        try:
+            cleaned_data["room_name"] = ensure_valid_role_room(role, cleaned_data.get("room_name"))
+        except ValueError as exc:
+            self.add_error("room_name", str(exc))
         return cleaned_data
 
 
@@ -133,7 +100,7 @@ class RoleAwareUserAdmin(UserAdmin):
 
     @admin.display(description="App Role")
     def app_role(self, obj):
-        return detect_user_role(obj)
+        return ROLE_LABELS.get(detect_user_role(obj), ROLE_VIEWER)
 
     @admin.display(description="Room")
     def app_room(self, obj):

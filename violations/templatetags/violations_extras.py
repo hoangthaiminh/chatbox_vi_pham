@@ -135,19 +135,11 @@ def _neutralise_in_attributes(html, placeholders_map):
     attr_re = re.compile(r'(\s[\w:-]+\s*=\s*)(["\'])(.*?)\2', re.DOTALL)
 
     def repl(match):
-        prefix, quote, inner = match.group(1), match.group(2), match.group(3)
-        new_inner = inner
-        for key in _PLACEHOLDER_RE.findall(inner):
-            info = placeholders_map.get(key)
-            if info is None:
-                continue
-            raw = info.get("raw_token") or ""
-            # Inside an attribute the same quote character would close it;
-            # escape it explicitly.
-            literal = escape(raw).replace(quote, "&#34;" if quote == '"' else "&#39;")
-            new_inner = new_inner.replace(key, literal)
-            info["kind"] = "consumed"
-        return prefix + quote + new_inner + quote
+        normalized = normalize_sbd(match.group(0))
+        return (
+            f'<button type="button" class="recognized-id mention-chip js-open-candidate-detail" '
+            f'data-sbd="{normalized}" aria-label="Open detail for {normalized}">{normalized}</button>'
+        )
 
     return attr_re.sub(repl, html)
 

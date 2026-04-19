@@ -31,7 +31,24 @@
 
     <h6 class="mb-3">Incident Timeline</h6>
     {% for incident in incidents %}
-        {% include "violations/_incident_card.html" with incident=incident mode="mini" %}
+        <article class="incident-mini mb-3 p-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <button type="button" class="badge text-bg-danger id-badge-btn js-open-candidate-detail" data-sbd="{{ incident.reported_sbd|upper }}" aria-label="Open detail for {{ incident.reported_sbd|upper }}">
+                    {{ incident.reported_sbd|upper }}
+                </button>
+                <small class="text-muted">{{ incident.created_at|date:"Y-m-d H:i" }}</small>
+            </div>
+            <p class="mb-2">{{ incident.violation_text|highlight_ids }}</p>
+            {% if incident.evidence %}
+                {% if incident.evidence_is_image %}
+                    <img src="{% url 'violations:incident_evidence' incident.pk %}" class="img-fluid rounded evidence-guard" alt="Evidence" draggable="false">
+                {% elif incident.evidence_is_video %}
+                    <video class="w-100 rounded evidence-guard" controls controlsList="nodownload noplaybackrate" disablePictureInPicture preload="metadata" oncontextmenu="return false">
+                        <source src="{% url 'violations:incident_evidence' incident.pk %}">
+                    </video>
+                {% endif %}
+            {% endif %}
+        </article>
     {% empty %}
         <p class="text-muted">No incidents available.</p>
     {% endfor %}

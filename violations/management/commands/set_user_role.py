@@ -1,8 +1,14 @@
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
 from django.core.management.base import BaseCommand, CommandError
 
-from violations.models import RoomAdminProfile
+from violations.services import (
+    ROLE_ROOM_ADMIN,
+    ROLE_SUPER_ADMIN,
+    ROLE_VIEWER,
+    apply_user_role,
+    ensure_valid_role_room,
+    format_role_assignment_success,
+)
 
 
 class Command(BaseCommand):
@@ -12,7 +18,7 @@ class Command(BaseCommand):
         parser.add_argument("username", type=str)
         parser.add_argument(
             "--role",
-            choices=["super_admin", "room_admin", "viewer"],
+            choices=[ROLE_SUPER_ADMIN, ROLE_ROOM_ADMIN, ROLE_VIEWER],
             required=True,
             help="Role to assign",
         )
@@ -34,31 +40,10 @@ class Command(BaseCommand):
         except User.DoesNotExist as exc:
             raise CommandError(f"User '{username}' does not exist.") from exc
 
-        # Ensure groups exist even if migrations were skipped in some environments.
-        super_admin_group, _ = Group.objects.get_or_create(name="super_admin")
-        room_admin_group, _ = Group.objects.get_or_create(name="room_admin")
+        try:
+            room_name = ensure_valid_role_room(role, room_name)
+        except ValueError as exc:
+            raise CommandError(f"--room is required for role {ROLE_ROOM_ADMIN}") from exc
 
-        user.groups.remove(super_admin_group, room_admin_group)
-
-        if role == "super_admin":
-            user.groups.add(super_admin_group)
-            RoomAdminProfile.objects.filter(user=user).delete()
-            self.stdout.write(self.style.SUCCESS(f"{username} set as super_admin."))
-            return
-
-        if role == "room_admin":
-            if not room_name:
-                raise CommandError("--room is required for role room_admin")
-            user.groups.add(room_admin_group)
-            RoomAdminProfile.objects.update_or_create(
-                user=user,
-                defaults={"room_name": room_name},
-            )
-            self.stdout.write(
-                self.style.SUCCESS(f"{username} set as room_admin for room '{room_name}'.")
-            )
-            return
-
-        # Viewer
-        RoomAdminProfile.objects.filter(user=user).delete()
-        self.stdout.write(self.style.SUCCESS(f"{username} set as viewer."))
+        apply_user_role(user, role, room_name)
+        self.stdout.write(self.style.SUCCESS(format_role_assignment_success(username, role, room_name)))

@@ -26,9 +26,10 @@ from .realtime import (
     render_incident_rows_html,
 )
 from .services import (
-    MAX_SBD_LENGTH,
-    MAX_VIOLATION_TEXT_LEN,
-    is_valid_sbd_syntax,
+    ROLE_LABELS,
+    ROLE_ROOM_ADMIN,
+    ROLE_SUPER_ADMIN,
+    ROLE_VIEWER,
     normalize_sbd,
     sync_incident_references,
 )
@@ -45,17 +46,21 @@ _MAX_ID_VALUE    = 2_147_483_647     # signed 32-bit max
 def is_super_admin(user):
     if not user.is_authenticated:
         return False
-    return user.is_superuser or user.groups.filter(name="super_admin").exists()
+    return user.is_superuser or user.groups.filter(name=ROLE_SUPER_ADMIN).exists()
 
 
 def is_room_admin(user):
     if not user.is_authenticated:
         return False
-    return user.groups.filter(name="room_admin").exists()
+    return user.groups.filter(name=ROLE_ROOM_ADMIN).exists()
 
 
 def can_post_message(user):
     return is_super_admin(user) or is_room_admin(user)
+
+
+def is_ajax_request(request):
+    return request.headers.get("x-requested-with") == "XMLHttpRequest"
 
 
 def get_user_room_name(user):
@@ -65,12 +70,12 @@ def get_user_room_name(user):
 
 def role_label(user):
     if is_super_admin(user):
-        return "Super Admin"
+        return ROLE_LABELS[ROLE_SUPER_ADMIN]
     if is_room_admin(user):
         room = get_user_room_name(user)
-        return f"Room Admin ({room})" if room else "Room Admin"
+        return f"{ROLE_LABELS[ROLE_ROOM_ADMIN]} ({room})" if room else ROLE_LABELS[ROLE_ROOM_ADMIN]
     if user.is_authenticated:
-        return "Viewer"
+        return ROLE_LABELS[ROLE_VIEWER]
     return "Guest Viewer"
 
 
@@ -134,6 +139,8 @@ def statistics(request):
 @login_required
 def create_incident(request):
     if not can_post_message(request.user):
+        if is_ajax_request(request):
+            return JsonResponse({"ok": False, "error": "You do not have permission to post incidents."}, status=403)
         return HttpResponseForbidden("You do not have permission to post incidents.")
 
     raw_sbd = (request.POST.get("sbd") or "").strip()
@@ -143,6 +150,19 @@ def create_incident(request):
 
     form = IncidentCreateForm(request.POST, request.FILES)
     if not form.is_valid():
+        if is_ajax_request(request):
+            error_text = "; ".join(
+                f"{field.replace('_', ' ').title()}: {', '.join(errors)}"
+                for field, errors in form.errors.items()
+            )
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": error_text or "Invalid incident data.",
+                    "errors": form.errors,
+                },
+                status=400,
+            )
         for field, errors in form.errors.items():
             label = field.replace("_", " ").title()
             for error in errors:
@@ -167,6 +187,10 @@ def create_incident(request):
     )
     _surface_truncation_warnings(request, sync_info)
     notify_live_update()
+
+    if is_ajax_request(request):
+        return JsonResponse({"ok": True})
+
     messages.success(request, "Incident posted successfully.")
     return redirect("violations:dashboard")
 

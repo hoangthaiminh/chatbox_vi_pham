@@ -1,33 +1,51 @@
 {% extends 'violations/base.html' %}
 
 {% block content %}
-<div class="messenger-shell" id="messenger-shell"
-     data-ws-path="/ws/live/"
-     data-history-url="{% url 'violations:incident_history' %}"
-     data-updates-url="{% url 'violations:incident_updates' %}"
-     data-can-post="{{ can_post|yesno:'1,0' }}">
-
-    <div class="subheader-bar">
-        <nav class="subheader-tabs">
-            <a href="{% url 'violations:dashboard' %}" class="subheader-tab active">
-                <i class="bi bi-chat-dots me-1"></i>Chat Box
-            </a>
-            <a href="{% url 'violations:statistics' %}" class="subheader-tab">
-                <i class="bi bi-bar-chart me-1"></i>Statistics
-            </a>
-            <span class="subheader-spacer"></span>
-            <small class="subheader-status text-muted" id="live-connection-status">Connecting…</small>
-        </nav>
+<div class="chat-layout" id="monitor-tabs-content" data-ws-path="/ws/live/" data-history-url="{% url 'violations:incident_history' %}" data-updates-url="{% url 'violations:incident_updates' %}">
+    <div class="live-header d-flex justify-content-between align-items-center mb-2">
+        <small class="text-muted" id="live-connection-status">Connecting websocket...</small>
     </div>
 
-    <div class="feed-area" id="incident-feed">
+    <div id="incident-feed" class="incident-feed incident-feed-fullscreen">
         <div id="incident-top-status" class="incident-top-status text-center small text-muted"></div>
-        <div id="incident-list-container"
-             data-oldest-id="{{ oldest_incident_id|default:'' }}"
-             data-newest-id="{{ newest_incident_id|default:'' }}"
-             data-has-older="{{ has_older|yesno:'1,0' }}">
+        <div id="incident-list-container" data-oldest-id="{{ oldest_incident_id|default:'' }}" data-newest-id="{{ newest_incident_id|default:'' }}" data-has-older="{{ has_older|yesno:'1,0' }}">
             {% include 'violations/_incident_list.html' %}
         </div>
+    </div>
+
+    <div class="composer-dock">
+        {% if can_post %}
+            <form method="post" action="{% url 'violations:create_incident' %}" enctype="multipart/form-data" class="composer-form row g-2 align-items-start">
+                {% csrf_token %}
+                <div class="col-12 col-md-2">
+                    <label class="form-label small mb-1" for="id_sbd">SBD</label>
+                    <input type="text" name="sbd" id="id_sbd" class="form-control" placeholder="TS0032" required>
+                </div>
+                <div class="col-12 col-md-6">
+                    <label class="form-label small mb-1" for="id_violation_text">Violation Content</label>
+                    <textarea name="violation_text" id="id_violation_text" class="form-control" rows="2" placeholder="Example: TS0032 exchanged messages with TS0030" required></textarea>
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label small mb-1" for="id_evidence">Image/Video</label>
+                    <input type="file" name="evidence" id="id_evidence" class="form-control" accept="image/*,video/*">
+                </div>
+                <div class="col-12 col-md-1 d-grid">
+                    <label class="form-label small mb-1 d-none d-md-block">&nbsp;</label>
+                    <button class="btn btn-dark" type="submit">
+                        <i class="bi bi-send"></i>
+                    </button>
+                </div>
+                <div class="col-12">
+                    <p class="text-muted small mt-1 mb-0">
+                        If a violation message references another SBD, both candidates are automatically counted in statistics.
+                    </p>
+                </div>
+            </form>
+        {% else %}
+            <div class="alert alert-secondary mb-0">
+                This account can view data only. Posting/editing is allowed only for room admins and super admins.
+            </div>
+        {% endif %}
     </div>
 </div>
 
