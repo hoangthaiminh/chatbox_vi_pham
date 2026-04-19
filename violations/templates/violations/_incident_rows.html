@@ -10,7 +10,9 @@
             </div>
 
             <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
-                <span class="badge text-bg-danger">{{ incident.reported_sbd|upper }}</span>
+                <button type="button" class="badge text-bg-danger id-badge-btn js-open-candidate-detail" data-sbd="{{ incident.reported_sbd|upper }}" aria-label="Open detail for {{ incident.reported_sbd|upper }}">
+                    {{ incident.reported_sbd|upper }}
+                </button>
                 {% if incident.reported_candidate %}
                     <span class="fw-semibold">{{ incident.reported_candidate.full_name }}</span>
                     <span class="text-muted small">{{ incident.reported_candidate.school }}</span>
@@ -26,12 +28,12 @@
 
             <div class="mt-2 d-flex flex-wrap gap-2">
                 {% for participant in incident.participants.all %}
-                    <span class="badge rounded-pill bg-secondary-subtle text-dark border">
+                    <button type="button" class="badge rounded-pill bg-secondary-subtle text-dark border id-badge-btn js-open-candidate-detail" data-sbd="{{ participant.sbd_snapshot|upper }}" aria-label="Open detail for {{ participant.sbd_snapshot|upper }}">
                         {{ participant.sbd_snapshot|upper }}
                         {% if participant.relation_type == 'mentioned' %}
                             (mentioned)
                         {% endif %}
-                    </span>
+                    </button>
                 {% endfor %}
             </div>
 

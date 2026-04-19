@@ -5,6 +5,7 @@
     --brand-deep: #253a34;
     --brand-warm: #b35c3a;
     --brand-muted: #8a9a94;
+    --composer-offset: 11rem;
 }
 
 * {
@@ -18,6 +19,10 @@ body {
     color: var(--ink);
     min-height: 100vh;
     position: relative;
+}
+
+html.chat-preload body {
+    visibility: hidden;
 }
 
 .bg-shape {
@@ -52,6 +57,23 @@ body {
     border-radius: 1rem;
     background: var(--panel-bg);
     box-shadow: 0 14px 40px rgba(0, 0, 0, 0.06);
+}
+
+.shell-panel-chat {
+    min-height: calc(100dvh - 8rem);
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+.chat-layout {
+    position: relative;
+}
+
+.page-switch-nav {
+    flex-wrap: wrap;
 }
 
 .panel-tabs .nav-link {
@@ -125,10 +147,56 @@ body {
     font-weight: 700;
 }
 
+.mention-chip {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    line-height: inherit;
+    font: inherit;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    cursor: pointer;
+}
+
+.mention-chip:hover,
+.mention-chip:focus-visible {
+    color: #8f3f1f;
+}
+
+.id-badge-btn {
+    cursor: pointer;
+}
+
 .incident-feed {
-    height: clamp(15rem, calc(100dvh - 28rem), 31rem);
-    overflow-y: auto;
+    height: auto;
+    overflow: visible;
     padding: 0.25rem 0.35rem;
+}
+
+.incident-feed-fullscreen {
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    padding: 0.25rem 0.35rem calc(var(--composer-offset) + 0.5rem);
+}
+
+.composer-dock {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(253, 253, 249, 0.96);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid rgba(0, 0, 0, 0.12);
+    padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+    z-index: 1090;
+}
+
+.composer-form {
+    margin: 0;
+    width: 100%;
+    max-width: none;
 }
 
 .incident-top-status {
@@ -227,7 +295,17 @@ body {
         max-width: 92%;
     }
 
-    .incident-feed {
-        height: clamp(13rem, calc(100dvh - 24rem), 23rem);
+    .incident-feed-fullscreen {
+        padding-bottom: calc(var(--composer-offset) + 0.5rem);
+    }
+}
+
+@media (max-width: 768px) {
+    .shell-panel-chat {
+        min-height: calc(100dvh - 6.5rem);
+    }
+
+    .page-switch-nav {
+        margin-left: 0 !important;
     }
 }

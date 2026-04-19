@@ -6,7 +6,7 @@ from django.db.models.functions import Upper
 
 from .models import Candidate, IncidentParticipant
 
-SBD_PATTERN = re.compile(r"\b[A-Za-z]{1,4}\d{3,6}\b")
+SBD_PATTERN = re.compile(r"\b[Tt][Ss]\d{4}\b")
 
 
 def normalize_sbd(value):

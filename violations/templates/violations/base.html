@@ -22,6 +22,16 @@
             <a class="navbar-brand fw-bold" href="{% url 'violations:dashboard' %}">
                 <i class="bi bi-shield-exclamation me-2"></i>Fraud Monitor
             </a>
+            {% with current_page=request.resolver_match.url_name %}
+                <div class="d-flex align-items-center gap-2 ms-md-3 me-auto page-switch-nav">
+                    <a href="{% url 'violations:dashboard' %}" class="btn btn-sm {% if current_page == 'dashboard' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+                        Chat Box
+                    </a>
+                    <a href="{% url 'violations:statistics' %}" class="btn btn-sm {% if current_page == 'statistics' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+                        Statistics
+                    </a>
+                </div>
+            {% endwith %}
             <div class="d-flex align-items-center gap-2 ms-auto">
                 <span class="badge rounded-pill text-bg-light border">{{ role_label|default:'Guest Viewer' }}</span>
                 {% if user.is_authenticated %}

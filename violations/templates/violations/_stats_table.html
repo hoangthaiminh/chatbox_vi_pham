@@ -50,7 +50,11 @@
                 <tbody>
                     {% for row in unknown_stats %}
                         <tr>
-                            <td>{{ row.normalized_sbd }}</td>
+                            <td>
+                                <button class="btn btn-link p-0 fw-semibold text-decoration-none js-open-candidate-detail" data-sbd="{{ row.normalized_sbd|upper }}">
+                                    {{ row.normalized_sbd|upper }}
+                                </button>
+                            </td>
                             <td>{{ row.total_violations }}</td>
                             <td>{{ row.last_violation_at|date:"Y-m-d H:i" }}</td>
                         </tr>

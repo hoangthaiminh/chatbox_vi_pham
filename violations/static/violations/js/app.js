@@ -3,6 +3,7 @@
     const incidentFeed = document.getElementById("incident-feed");
     const incidentTopStatus = document.getElementById("incident-top-status");
     const incidentListContainer = document.getElementById("incident-list-container");
+    const composerDock = document.querySelector(".composer-dock");
     const statsTableContainer = document.getElementById("stats-table-container");
     const liveConnectionStatus = document.getElementById("live-connection-status");
     const detailContent = document.getElementById("candidate-detail-content");
@@ -15,6 +16,12 @@
     let reconnectDelayMs = 1000;
     let loadingOlder = false;
     let loadingUpdates = false;
+    let hasInitializedBottomView = false;
+    let hasRevealedPreload = false;
+
+    if ("scrollRestoration" in history) {
+        history.scrollRestoration = "manual";
+    }
 
     function parseId(value) {
         const parsed = Number.parseInt(value, 10);
@@ -81,17 +88,61 @@
     }
 
     function isNearBottom() {
-        if (!incidentFeed) {
+        if (!incidentListContainer) {
             return true;
         }
-        return incidentFeed.scrollHeight - incidentFeed.scrollTop - incidentFeed.clientHeight < 96;
+        const doc = document.documentElement;
+        return window.innerHeight + window.scrollY >= doc.scrollHeight - 96;
+    }
+
+    function instantScrollTo(topValue) {
+        const doc = document.documentElement;
+        const previousInlineBehavior = doc.style.scrollBehavior;
+        doc.style.scrollBehavior = "auto";
+        window.scrollTo(0, Math.max(topValue, 0));
+        doc.style.scrollBehavior = previousInlineBehavior;
     }
 
     function scrollToBottom() {
-        if (!incidentFeed) {
+        if (!incidentListContainer) {
             return;
         }
-        incidentFeed.scrollTop = incidentFeed.scrollHeight;
+        syncComposerOffset();
+        const doc = document.documentElement;
+        instantScrollTo(doc.scrollHeight - window.innerHeight);
+    }
+
+    function forceScrollToBottom() {
+        scrollToBottom();
+        window.requestAnimationFrame(scrollToBottom);
+        window.setTimeout(scrollToBottom, 80);
+    }
+
+    function revealChatAfterPreload() {
+        if (hasRevealedPreload) {
+            return;
+        }
+        hasRevealedPreload = true;
+        document.documentElement.classList.remove("chat-preload");
+    }
+
+    function initializeBottomView() {
+        if (!incidentListContainer || hasInitializedBottomView) {
+            return;
+        }
+
+        hasInitializedBottomView = true;
+        syncComposerOffset();
+        scrollToBottom();
+        revealChatAfterPreload();
+    }
+
+    function syncComposerOffset() {
+        if (!composerDock) {
+            return;
+        }
+        const composerHeight = composerDock.getBoundingClientRect().height;
+        document.documentElement.style.setProperty("--composer-offset", `${Math.ceil(composerHeight)}px`);
     }
 
     function htmlToNodes(html) {
@@ -111,7 +162,7 @@
     }
 
     function prependIncidents(html) {
-        if (!incidentListContainer || !incidentFeed) {
+        if (!incidentListContainer) {
             return 0;
         }
 
@@ -121,11 +172,13 @@
         }
 
         removeEmptyState();
-        const previousHeight = incidentFeed.scrollHeight;
-        const previousTop = incidentFeed.scrollTop;
+        const doc = document.documentElement;
+        const previousHeight = doc.scrollHeight;
+        const previousTop = window.scrollY;
         nodes.forEach((node) => incidentListContainer.prepend(node));
         bindEvidenceGuards(incidentListContainer);
-        incidentFeed.scrollTop = previousTop + (incidentFeed.scrollHeight - previousHeight);
+        const heightDelta = doc.scrollHeight - previousHeight;
+        instantScrollTo(previousTop + heightDelta);
         return nodes.length;
     }
 
@@ -235,7 +288,7 @@
             }
 
             if (shouldStickBottom && added > 0) {
-                scrollToBottom();
+                forceScrollToBottom();
             }
         } catch (error) {
             console.debug("Update fetch failed:", error);
@@ -270,7 +323,7 @@
 
         liveSocket.addEventListener("open", () => {
             reconnectDelayMs = 1000;
-            updateConnectionStatus("Live updates connected");
+            updateConnectionStatus("");
         });
 
         liveSocket.addEventListener("message", (event) => {
@@ -367,17 +420,31 @@
 
     bindEvidenceGuards(document);
     blockClipboardForEvidence();
+    syncComposerOffset();
 
-    if (incidentFeed) {
-        incidentFeed.addEventListener("scroll", () => {
-            if (incidentFeed.scrollTop < 80) {
+    window.addEventListener("resize", () => {
+        syncComposerOffset();
+    }, { passive: true });
+
+    if (incidentListContainer) {
+        window.addEventListener("scroll", () => {
+            if (window.scrollY < 80) {
                 loadOlderMessages();
             }
-        });
+        }, { passive: true });
     }
 
     if (monitorRoot) {
-        scrollToBottom();
+        if (incidentListContainer) {
+            if (document.readyState === "complete") {
+                initializeBottomView();
+            } else {
+                window.addEventListener("load", initializeBottomView, { once: true });
+                window.setTimeout(initializeBottomView, 700);
+            }
+        } else {
+            revealChatAfterPreload();
+        }
         connectLiveSocket();
         document.addEventListener("visibilitychange", () => {
             if (!document.hidden) {

@@ -4,16 +4,7 @@
 <div class="row g-4 align-items-stretch">
     <div class="col-12">
         <div class="shell-panel p-2 p-md-3">
-            <ul class="nav nav-pills nav-fill panel-tabs" id="monitor-tabs" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <a class="nav-link" href="{% url 'violations:dashboard' %}">Chat Box</a>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link active" type="button" aria-current="page">Statistics</button>
-                </li>
-            </ul>
-
-            <div class="mt-3" id="monitor-tabs-content" data-ws-path="/ws/live/" data-updates-url="{% url 'violations:incident_updates' %}">
+            <div id="monitor-tabs-content" data-ws-path="/ws/live/" data-updates-url="{% url 'violations:incident_updates' %}">
             <div class="row g-3">
                 {% if can_import_candidates %}
                     <div class="col-12">

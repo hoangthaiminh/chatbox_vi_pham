@@ -31,7 +31,9 @@
     {% for incident in incidents %}
         <article class="incident-mini mb-3 p-3">
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <span class="badge text-bg-danger">{{ incident.reported_sbd|upper }}</span>
+                <button type="button" class="badge text-bg-danger id-badge-btn js-open-candidate-detail" data-sbd="{{ incident.reported_sbd|upper }}" aria-label="Open detail for {{ incident.reported_sbd|upper }}">
+                    {{ incident.reported_sbd|upper }}
+                </button>
                 <small class="text-muted">{{ incident.created_at|date:"Y-m-d H:i" }}</small>
             </div>
             <p class="mb-2">{{ incident.violation_text|highlight_ids }}</p>

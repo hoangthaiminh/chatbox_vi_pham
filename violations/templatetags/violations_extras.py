@@ -16,6 +16,9 @@ def highlight_ids(value, autoescape=True):
 
     def repl(match):
         normalized = normalize_sbd(match.group(0))
-        return f'<span class="recognized-id">{normalized}</span>'
+        return (
+            f'<button type="button" class="recognized-id mention-chip js-open-candidate-detail" '
+            f'data-sbd="{normalized}" aria-label="Open detail for {normalized}">{normalized}</button>'
+        )
 
     return mark_safe(SBD_PATTERN.sub(repl, escaped_text))
