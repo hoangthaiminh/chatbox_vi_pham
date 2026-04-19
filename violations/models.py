@@ -54,6 +54,14 @@ class Incident(models.Model):
         related_name="reported_incidents",
     )
     violation_text = models.TextField()
+    is_markdown = models.BooleanField(
+        default=False,
+        help_text=(
+            "True when the author composed in the expanded Markdown editor; "
+            "False for quick single-line sends where the text should be "
+            "rendered as plain text (with mention resolution only)."
+        ),
+    )
     evidence = models.FileField(upload_to="evidence/%Y/%m/%d/", blank=True, null=True)
     room_name = models.CharField(max_length=50, blank=True)
     created_by = models.ForeignKey(

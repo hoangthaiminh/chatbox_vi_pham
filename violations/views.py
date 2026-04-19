@@ -7,6 +7,7 @@ from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
+from django.db import models
 from django.http import FileResponse, Http404, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -135,7 +136,6 @@ def create_incident(request):
     if not can_post_message(request.user):
         return HttpResponseForbidden("You do not have permission to post incidents.")
 
-    # Hard server-side SBD syntax check (before form, prevents any bypass)
     raw_sbd = (request.POST.get("sbd") or "").strip()
     if not is_valid_sbd_syntax(raw_sbd):
         messages.error(request, "SBD không hợp lệ: chỉ dùng chữ cái tiếng Anh và chữ số.")
@@ -149,22 +149,40 @@ def create_incident(request):
                 messages.error(request, f"{label}: {error}")
         return redirect("violations:dashboard")
 
+    is_markdown = request.POST.get("is_markdown") == "1"
+
     incident = Incident(
         created_by=request.user,
         room_name=get_user_room_name(request.user),
+        is_markdown=is_markdown,
     )
     evidence = form.cleaned_data.get("evidence")
     if evidence:
         incident.evidence = evidence
 
-    sync_incident_references(
+    sync_info = sync_incident_references(
         incident=incident,
         primary_sbd=form.cleaned_data["sbd"],
         violation_text=form.cleaned_data["violation_text"],
     )
+    _surface_truncation_warnings(request, sync_info)
     notify_live_update()
     messages.success(request, "Incident posted successfully.")
     return redirect("violations:dashboard")
+
+
+def _surface_truncation_warnings(request, sync_info):
+    """Attach a user-visible warning if the service had to drop trailing
+    digits from any SBD during normalisation."""
+    from .services import MAX_SBD_LENGTH
+    truncated = bool(sync_info.get("primary_sbd_truncated")) or bool(
+        sync_info.get("mention_truncations")
+    )
+    if truncated:
+        messages.warning(
+            request,
+            f"Những SBD quá {MAX_SBD_LENGTH} ký tự đã được cắt ngắn bằng cách xoá một số ký tự cuối.",
+        )
 
 
 # ── Incident edit ─────────────────────────────────────────────────────────────
@@ -199,11 +217,14 @@ def edit_incident(request, pk):
                     incident.evidence.delete(save=False)
                 incident.evidence = evidence
 
-            sync_incident_references(
+            incident.is_markdown = True
+
+            sync_info = sync_incident_references(
                 incident=incident,
                 primary_sbd=form.cleaned_data["sbd"],
                 violation_text=form.cleaned_data["violation_text"],
             )
+            _surface_truncation_warnings(request, sync_info)
             notify_live_update()
             messages.success(request, "Incident updated successfully.")
             return redirect("violations:dashboard")
@@ -230,11 +251,11 @@ def edit_incident(request, pk):
 
 @require_GET
 def candidate_detail(request, sbd):
-    # Validate SBD from URL — reject oversized or syntactically invalid values
     if len(sbd) > _MAX_SBD_URL_LEN or not is_valid_sbd_syntax(sbd):
         raise Http404("Invalid SBD.")
 
-    normalized_sbd = normalize_sbd(sbd)
+    from .services import apply_default_prefix
+    normalized_sbd, _ = apply_default_prefix(sbd)
     candidate = Candidate.objects.filter(sbd__iexact=normalized_sbd).first()
     incidents = (
         Incident.objects.filter(participants__sbd_snapshot__iexact=normalized_sbd)
@@ -269,13 +290,20 @@ def incident_evidence(request, pk):
 # ── Candidate search (mention autocomplete) ───────────────────────────────────
 
 @require_GET
-@login_required  # Only authenticated users (admins/viewers) may query candidate list
+@login_required
 def candidate_search(request):
-    q = (request.GET.get("q") or "").strip().upper()[:50]  # cap query length
+    q = (request.GET.get("q") or "").strip().upper()[:50]
     if not q:
         qs = Candidate.objects.all().order_by("sbd")[:20]
     else:
-        qs = Candidate.objects.filter(sbd__icontains=q).order_by("sbd")[:20]
+        if q.isdigit():
+            from .services import apply_default_prefix
+            canonical, _ = apply_default_prefix(q)
+            qs = Candidate.objects.filter(
+                models.Q(sbd__icontains=q) | models.Q(sbd__icontains=canonical)
+            ).order_by("sbd")[:20]
+        else:
+            qs = Candidate.objects.filter(sbd__icontains=q).order_by("sbd")[:20]
     results = [{"sbd": c.sbd, "full_name": c.full_name} for c in qs]
     return JsonResponse({"results": results})
 
@@ -373,12 +401,16 @@ def import_candidates(request):
                 return row[raw_header].strip()
         return default
 
-    created_count = updated_count = 0
+    created_count = updated_count = truncated_count = 0
 
     for row in reader:
-        sbd = normalize_sbd(row_value(row, ["sbd", "sobaodanh"]))
+        raw_sbd = row_value(row, ["sbd", "sobaodanh"])
+        if not raw_sbd:
+            continue
+        from .services import apply_default_prefix
+        sbd, was_truncated = apply_default_prefix(raw_sbd)
         if not sbd or not is_valid_sbd_syntax(sbd):
-            continue  # skip rows with missing or malformed SBD
+            continue
 
         defaults = {
             "full_name": row_value(row, ["hovaten", "fullname", "name"], default="Unknown")[:150],
@@ -394,11 +426,13 @@ def import_candidates(request):
             created_count += 1
         else:
             updated_count += 1
+        if was_truncated:
+            truncated_count += 1
 
-    messages.success(
-        request,
-        f"Candidate import finished. Created: {created_count}, Updated: {updated_count}.",
-    )
+    summary = f"Candidate import finished. Created: {created_count}, Updated: {updated_count}."
+    if truncated_count:
+        summary += f" {truncated_count} SBD đã được cắt ngắn cho vừa {MAX_SBD_LENGTH} ký tự."
+    messages.success(request, summary)
     notify_live_update()
     return redirect("violations:dashboard")
 
@@ -459,32 +493,37 @@ def incident_preview(request):
 
     raw_sbd = (request.POST.get("sbd") or "").strip()
     raw_text = (request.POST.get("violation_text") or "")
+    is_markdown = request.POST.get("is_markdown") == "1"
 
-    # Defensive clamps. Form validation is not applied here because the author
-    # is mid-compose and may have an empty/invalid SBD — we still want to show
-    # what the markdown looks like.
     if len(raw_text) > MAX_VIOLATION_TEXT_LEN:
         raw_text = raw_text[:MAX_VIOLATION_TEXT_LEN]
 
+    from .services import MENTION_TOKEN_PATTERN, SBD_PATTERN, apply_default_prefix
+
     if raw_sbd and is_valid_sbd_syntax(raw_sbd):
-        sbd = normalize_sbd(raw_sbd)
+        sbd, _ = apply_default_prefix(raw_sbd)
     else:
         sbd = raw_sbd.upper()[:9]
+
+    def _canon(m):
+        canon, _ = apply_default_prefix(m.group(1))
+        if SBD_PATTERN.match(canon):
+            return "@{" + canon + "}"
+        return m.group(0)
+    raw_text = MENTION_TOKEN_PATTERN.sub(_canon, raw_text)
 
     candidate = (
         Candidate.objects.filter(sbd__iexact=sbd).first() if sbd else None
     )
 
-    # In-memory Incident stand-in. We deliberately do NOT save it. The
-    # template only reads attributes; participants is an empty list.
     preview_incident = Incident(
         reported_sbd=sbd,
         violation_text=raw_text,
         room_name=get_user_room_name(request.user),
+        is_markdown=is_markdown,
     )
     preview_incident.reported_candidate = candidate
     preview_incident.created_by = request.user
-    # created_at is None by default on unsaved model; template guards for that.
 
     html = render_to_string(
         "violations/_incident_card.html",

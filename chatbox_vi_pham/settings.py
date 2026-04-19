@@ -12,6 +12,7 @@ only safe for local development.
 """
 
 import os
+import re
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -168,4 +169,15 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000
 # this; longer-lived sessions are unnecessary attack surface).
 SESSION_COOKIE_AGE = 8 * 60 * 60
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
-SESSION_SAVE_EVERY_REQUEST = True  # extend on activity
+SESSION_SAVE_EVERY_REQUEST = True
+
+
+_prefix_raw = os.environ.get("SBD_DEFAULT_PREFIX", "TS")
+_prefix = (_prefix_raw or "").strip().upper()
+if not re.fullmatch(r"[A-Z]{2}", _prefix):
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured(
+        f"SBD_DEFAULT_PREFIX must be exactly 2 Latin letters (A-Z). "
+        f"Got {_prefix_raw!r}."
+    )
+SBD_DEFAULT_PREFIX = _prefix

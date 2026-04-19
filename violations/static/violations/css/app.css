@@ -30,7 +30,6 @@ body {
     backdrop-filter: blur(8px);
 }
 
-/* ── Page-level tab bar ── */
 .page-tabs-bar {
     background: rgba(249,250,246,0.95);
     border-bottom: 1px solid rgba(0,0,0,0.08);
@@ -53,7 +52,6 @@ body {
     color: #fff;
 }
 
-/* ── Chat bubbles ── */
 .incident-item {
     border: 1px solid rgba(0,0,0,0.08);
     border-radius: 0.95rem;
@@ -83,7 +81,6 @@ body {
 }
 .chat-sender { color: #2f3f39; }
 
-/* ── Markdown-rendered chat content ── */
 .chat-text { word-break: break-word; }
 
 .chat-text.markdown-body {
@@ -146,7 +143,6 @@ body {
 .chat-text.markdown-body th { background: #f1f5f3; font-weight: 600; }
 .chat-text.markdown-body hr { border: none; border-top: 1px solid rgba(0,0,0,0.12); margin: 0.5rem 0; }
 
-/* Mention link inside chat feed */
 .mention-link {
     color: #1a6fa8;
     font-weight: 700;
@@ -162,14 +158,11 @@ body {
     text-decoration: underline;
 }
 
-/* Mention link when the SBD is syntactically valid but the Candidate row
-   does not exist. Visually disabled; not focusable; not pointer. The inner
-   <s> gives the strike on the SBD itself so the reader still sees the ID. */
 .mention-link--missing {
     color: #8b8f94;
     background: rgba(139,143,148,0.08);
     cursor: not-allowed;
-    pointer-events: none;          /* blocks click + hover effects */
+    pointer-events: none;          
     user-select: text;
 }
 .mention-link--missing:hover {
@@ -180,7 +173,6 @@ body {
     text-decoration-thickness: 1.5px;
 }
 
-/* ── Live Incident Feed ── */
 .incident-feed {
     height: clamp(30rem, calc(100dvh - 18rem), 64rem);
     overflow-y: auto;
@@ -194,7 +186,6 @@ body {
     to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Evidence ── */
 .evidence-wrap img,
 .evidence-wrap video {
     display: block; width: auto; max-width: 100%; height: auto;
@@ -212,32 +203,24 @@ body {
     max-height: 72vh; margin: 0 auto; object-fit: contain;
 }
 
-/* ── Stats table ── */
 .stats-table thead th { background: #f1f5f3; white-space: nowrap; }
 
-/* ── Candidate offcanvas ── */
 .candidate-offcanvas { width: 66vw !important; max-width: 980px; }
 
 .incident-mini { border: 1px solid rgba(0,0,0,0.08); border-radius: 0.75rem; background: #fff; }
 .detail-label  { font-size: 0.75rem; text-transform: uppercase; color: #6c757d; letter-spacing: 0.04em; }
 .detail-value  { font-weight: 600; }
 
-/* ── Toasts ── */
 .app-toast-container { z-index: 1200; }
 .app-toast {
     min-width: 18rem; max-width: min(92vw, 24rem);
     box-shadow: 0 10px 24px rgba(0,0,0,0.22);
 }
 
-/* ══════════════════════════════════════════
-   MARKDOWN EDITOR TOOLBAR
-══════════════════════════════════════════ */
 .md-editor-wrap {
     border: 1px solid #ced4da;
     border-radius: 0.5rem;
-    /* overflow intentionally NOT hidden — the mention dropdown needs to
-       escape this container visually. Rounded corners are instead clipped
-       by the two child elements (.md-toolbar and .md-textarea) below. */
+
     background: #fff;
     transition: border-color 0.15s, box-shadow 0.15s;
 }
@@ -294,9 +277,6 @@ body {
     align-self: center;
 }
 
-/* The textarea inside editor — no extra border since wrapper handles it.
-   Bottom-rounded so the wrapper still looks clipped even though overflow
-   is now visible (to let the mention dropdown escape). */
 .md-textarea {
     border: none !important;
     border-radius: 0 !important;
@@ -311,14 +291,6 @@ body {
 }
 .md-textarea:focus { outline: none !important; box-shadow: none !important; }
 
-/* ══════════════════════════════════════════
-   MENTION DROPDOWN
-   ─────────────────────────────────────────
-   position: fixed so it is *never* clipped by any ancestor's
-   overflow:hidden / scroll / transform. JS sets top/left/width each
-   time the dropdown opens and on scroll/resize.
-   z-index is above Bootstrap offcanvas (1045) and card shadows.
-══════════════════════════════════════════ */
 .mention-textarea-wrap { position: relative; }
 
 .mention-dropdown {
@@ -361,7 +333,6 @@ body {
     text-align: center;
 }
 
-/* Suggest tooltip */
 .mention-suggest-tip {
     position: fixed;
     background: #253a34;
@@ -389,7 +360,6 @@ body {
     to   { opacity: 1; transform: translateY(0); }
 }
 
-/* SBD input validation state */
 #id_sbd.is-invalid { border-color: #dc3545; }
 #id_sbd.is-valid   { border-color: #198754; }
 
@@ -399,9 +369,6 @@ body {
     .incident-feed { height: clamp(24rem, calc(100dvh - 16rem), 46rem); }
 }
 
-/* ══════════════════════════════════════════
-   MARKDOWN EDITOR — INPUT/PREVIEW TABS
-══════════════════════════════════════════ */
 .md-tab-bar {
     display: flex;
     gap: 0;
@@ -427,7 +394,6 @@ body {
     border-bottom-color: #3b6658;
 }
 
-/* Preview pane: fits content, scrollable if tall */
 .md-pane-preview {
     min-height: 80px;
     max-height: 420px;
@@ -437,10 +403,9 @@ body {
 }
 
 .md-preview-content {
-    /* inherits .markdown-body styles */
+
 }
 
-/* @{SBD} in preview — show as a mention-like chip (no DB lookup client-side) */
 .mention-preview-chip {
     display: inline-block;
     background: rgba(26,111,168,0.1);
@@ -451,9 +416,6 @@ body {
     font-size: 0.92em;
 }
 
-/* ══════════════════════════════════════════
-   VIDEO EVIDENCE IN FEED
-══════════════════════════════════════════ */
 .incident-video-wrap {
     position: relative;
     display: inline-block;
@@ -471,7 +433,7 @@ body {
     max-height: 220px;
     object-fit: cover;
     border-radius: 0.65rem;
-    pointer-events: none; /* click handled by wrapper */
+    pointer-events: none; 
 }
 
 .video-play-overlay {
@@ -491,7 +453,6 @@ body {
     filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
 }
 
-/* Legacy image evidence (backward compat) */
 .incident-legacy-img {
     max-width: min(100%, 380px);
     max-height: 240px;
@@ -501,7 +462,6 @@ body {
     object-fit: cover;
 }
 
-/* Clickable images inside markdown body */
 .markdown-body img {
     cursor: zoom-in;
     border-radius: 0.5rem;
@@ -509,7 +469,307 @@ body {
 }
 .markdown-body img:hover { opacity: 0.88; }
 
-/* ══════════════════════════════════════════
-   LIGHTGALLERY customisation
-══════════════════════════════════════════ */
 .lg-backdrop { background: rgba(0,0,0,0.92); }
+
+
+:root {
+    --navbar-h: 58px;
+    --subheader-h: 44px;
+    --compose-h: 72px;
+}
+
+.messenger-shell {
+    display: block;
+    width: 100%;
+}
+
+.main-area {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+.subheader-bar {
+    position: sticky;
+    top: var(--navbar-h);
+    z-index: 900;
+    background: rgba(249, 250, 246, 0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    height: var(--subheader-h);
+    display: flex;
+    align-items: center;
+    padding: 0 1rem;
+}
+.subheader-tabs {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    width: 100%;
+    font-size: 0.9rem;
+}
+.subheader-tab {
+    color: var(--brand-muted);
+    text-decoration: none;
+    padding: 0.3rem 0.8rem;
+    border-radius: 0.5rem;
+    font-weight: 500;
+    transition: background 0.15s, color 0.15s;
+    line-height: 1.2;
+}
+.subheader-tab:hover {
+    color: var(--brand-deep);
+    background: rgba(59, 102, 88, 0.08);
+}
+.subheader-tab.active {
+    color: #fff;
+    background: var(--brand-deep);
+}
+.subheader-spacer { flex: 1; }
+.subheader-status { white-space: nowrap; }
+
+.feed-area {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 1rem 0.75rem calc(var(--compose-h) + 1rem);
+    min-height: calc(100vh - var(--navbar-h) - var(--subheader-h));
+}
+.feed-area--no-compose {
+    padding-bottom: 1rem;
+}
+
+@media (min-width: 768px) {
+    .feed-area { padding: 1.25rem 1.5rem calc(var(--compose-h) + 1.25rem); }
+    .feed-area--no-compose { padding-bottom: 1.25rem; }
+}
+
+.compose-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 950;
+    background: rgba(253, 253, 249, 0.97);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.04);
+}
+.compose-bar--viewer {
+    padding: 0.9rem 1rem;
+    text-align: center;
+}
+
+.compose-simple {
+    display: grid;
+    grid-template-columns: 140px 1fr auto auto;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.6rem 0.9rem;
+    max-width: 1280px;
+    margin: 0 auto;
+}
+.compose-sbd .form-control {
+    font-weight: 600;
+    text-align: center;
+    letter-spacing: 0.02em;
+}
+.compose-sbd .invalid-feedback {
+    font-size: 0.72rem;
+    position: absolute;
+    margin-top: 0.15rem;
+}
+
+.compose-text-wrap {
+    position: relative;
+}
+.compose-simple-input {
+    padding-right: 2.6rem;
+    border-radius: 1.5rem;
+}
+.compose-expand-btn {
+    position: absolute;
+    right: 0.4rem;
+    top: 50%;
+    transform: translateY(-50%);
+    border: none;
+    background: transparent;
+    color: var(--brand-muted);
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: background 0.15s, color 0.15s;
+}
+.compose-expand-btn:hover {
+    background: rgba(59, 102, 88, 0.1);
+    color: var(--brand-deep);
+}
+
+.compose-video {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    cursor: pointer;
+    padding: 0.45rem 0.7rem;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--brand-muted);
+    transition: background 0.15s, color 0.15s;
+    margin: 0;
+    font-size: 1.05rem;
+}
+.compose-video:hover {
+    background: rgba(59, 102, 88, 0.08);
+    color: var(--brand-deep);
+}
+.compose-video-filename {
+    max-width: 10rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.75rem;
+}
+.compose-video.has-file { color: var(--brand-deep); }
+
+.compose-send {
+    border-radius: 50%;
+    width: 2.4rem;
+    height: 2.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+    .compose-simple {
+        grid-template-columns: 90px 1fr auto auto;
+        gap: 0.3rem;
+        padding: 0.5rem 0.6rem;
+    }
+    .compose-video-filename { display: none; }
+}
+
+.compose-expanded {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0.5rem 0.9rem 0.9rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+.compose-bar.is-expanded .compose-simple {
+    padding-bottom: 0.3rem;
+}
+.compose-bar.is-expanded .compose-expand-btn {
+    display: none;
+}
+.compose-bar.is-expanded .compose-simple-input {
+    display: none;
+}
+.compose-bar.is-expanded .compose-text-wrap::before {
+    content: "Đang soạn ở chế độ Markdown…";
+    display: block;
+    padding: 0.5rem 1rem;
+    color: var(--brand-muted);
+    font-size: 0.85rem;
+    background: rgba(59, 102, 88, 0.05);
+    border-radius: 1rem;
+    font-style: italic;
+}
+
+.md-tab-bar {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(247, 249, 247, 0.9);
+    border-top-left-radius: 0.5rem;
+    border-top-right-radius: 0.5rem;
+}
+.md-tab-btn {
+    background: transparent;
+    border: none;
+    padding: 0.55rem 1rem;
+    font-size: 0.87rem;
+    color: var(--brand-muted);
+    cursor: pointer;
+    font-weight: 500;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+}
+.md-tab-btn:hover { color: var(--brand-deep); }
+.md-tab-btn.active {
+    color: var(--brand-deep);
+    border-bottom-color: var(--brand-deep);
+}
+.md-tab-spacer { flex: 1; }
+.md-collapse-btn {
+    border: none;
+    background: transparent;
+    color: var(--brand-muted);
+    padding: 0.4rem 0.8rem;
+    cursor: pointer;
+    border-radius: 0.35rem;
+    transition: background 0.15s, color 0.15s;
+}
+.md-collapse-btn:hover {
+    background: rgba(59, 102, 88, 0.1);
+    color: var(--brand-deep);
+}
+
+.md-preview-content {
+    min-height: 6rem;
+    max-height: 50vh;
+    overflow-y: auto;
+    padding: 0.75rem;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 0.4rem;
+}
+.md-preview-footer {
+    display: flex;
+    width: 100%;
+    padding: 0.4rem 0 0;
+}
+.md-preview-footer .md-preview-reload {
+    flex: 1;
+    font-size: 0.8rem;
+}
+
+.md-preview-skeleton {
+    padding: 0.5rem 0;
+}
+.md-preview-skeleton .skel-line {
+    height: 0.8rem;
+    margin-bottom: 0.55rem;
+    border-radius: 0.3rem;
+    background: linear-gradient(90deg, #ececec 0%, #f5f5f5 50%, #ececec 100%);
+    background-size: 200% 100%;
+    animation: skel-shimmer 1.2s linear infinite;
+}
+.md-preview-skeleton .skel-line:nth-child(1) { width: 45%; }
+.md-preview-skeleton .skel-line:nth-child(2) { width: 90%; }
+.md-preview-skeleton .skel-line:nth-child(3) { width: 75%; }
+.md-preview-skeleton .skel-line:nth-child(4) { width: 60%; }
+
+@keyframes skel-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+.chat-row { margin-bottom: 0.6rem !important; }
+.incident-feed {
+    height: auto !important;
+    overflow-y: visible !important;
+    padding: 0 !important;
+}
+
+.chat-text.plain-text,
+.chat-text .plain-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+}

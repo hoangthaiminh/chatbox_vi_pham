@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
     <link href="{% static 'vendor/bootstrap-icons/css/bootstrap-icons.min.css' %}" rel="stylesheet">
-    <!-- LightGallery v2 -->
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/lightgallery/2.8.3/css/lightgallery-bundle.min.css">
     <link href="{% static 'violations/css/app.css' %}" rel="stylesheet">
     {% block extra_head %}{% endblock %}
@@ -59,16 +59,18 @@
         {% endif %}
     </div>
 
-    <main class="container-fluid py-4 px-3 px-md-4">
+    <main class="container-fluid py-4 px-3 px-md-4 main-area">
         {% block content %}{% endblock %}
     </main>
 
+    {% block bottom_bar %}{% endblock %}
+
     <script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
-    <!-- LightGallery v2 core + plugins -->
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lightgallery/2.8.3/lightgallery.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lightgallery/2.8.3/plugins/zoom/lg-zoom.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lightgallery/2.8.3/plugins/video/lg-video.umd.min.js"></script>
-    <!-- marked.js for client-side markdown preview -->
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
     <script src="{% static 'violations/js/app.js' %}"></script>
     <script>

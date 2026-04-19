@@ -153,12 +153,17 @@ def _neutralise_in_attributes(html, placeholders_map):
 
 
 @register.filter(is_safe=True)
-def render_violation(value):
-    """Render violation_text as Markdown with mention-aware post-processing."""
+def render_violation(value, is_markdown=True):
+    """Render violation_text, preserving mention rules.
+
+    is_markdown=True: run the GFM-ish markdown pipeline (default).
+    is_markdown=False: plain text — HTML-escape content, newlines → <br>,
+    no bold/italic/table/etc processing. Mentions are still resolved in
+    both modes exactly the same way.
+    """
     text = str(value or "")
     known_sbds = _get_known_sbds()
 
-    # key → {"kind": "literal"|"pending"|"consumed", "sbd": ..., "raw_token": ...}
     placeholders = {}
 
     def on_mention(match):
@@ -178,22 +183,21 @@ def render_violation(value):
             }
         return key
 
-    # Step 0 — strip raw HTML tags from input (defence in depth against
-    # markdown passthrough of raw <script> etc.).
     text_stripped = _ALL_HTML_TAGS_RE.sub("", text)
-
-    # Step 1 — swap mention tokens for opaque placeholders.
     processed = MENTION_TOKEN_PATTERN.sub(on_mention, text_stripped)
 
-    # Step 2 — markdown.
-    rendered = md_lib.markdown(
-        processed,
-        extensions=["nl2br", "fenced_code", "tables", "pymdownx.tilde"],
-        extension_configs={
-            "pymdownx.tilde": {"subscript": False},
-        },
-        output_format="html",
-    )
+    if is_markdown:
+        rendered = md_lib.markdown(
+            processed,
+            extensions=["nl2br", "fenced_code", "tables", "pymdownx.tilde"],
+            extension_configs={
+                "pymdownx.tilde": {"subscript": False},
+            },
+            output_format="html",
+        )
+    else:
+        escaped = escape(processed).replace("\n", "<br>\n")
+        rendered = f'<p class="plain-text">{escaped}</p>'
 
     if not placeholders:
         return mark_safe(rendered)

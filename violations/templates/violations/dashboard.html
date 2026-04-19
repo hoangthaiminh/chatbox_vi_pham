@@ -1,158 +1,38 @@
 {% extends 'violations/base.html' %}
 
 {% block content %}
-<!-- Tab bar -->
-<div class="page-tabs-bar mb-0">
-    <ul class="nav nav-pills panel-tabs" id="monitor-tabs" role="tablist" style="max-width:320px;">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="chat-tab" data-bs-toggle="pill" data-bs-target="#chat-pane"
-                type="button" role="tab" aria-controls="chat-pane" aria-selected="true">Chat Box</button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <a class="nav-link" href="{% url 'violations:statistics' %}">Statistics</a>
-        </li>
-    </ul>
-</div>
-
-<div class="tab-content pt-3" id="monitor-tabs-content"
+<div class="messenger-shell" id="messenger-shell"
      data-ws-path="/ws/live/"
      data-history-url="{% url 'violations:incident_history' %}"
-     data-updates-url="{% url 'violations:incident_updates' %}">
+     data-updates-url="{% url 'violations:incident_updates' %}"
+     data-can-post="{{ can_post|yesno:'1,0' }}">
 
-    <section class="tab-pane fade show active" id="chat-pane" role="tabpanel" aria-labelledby="chat-tab">
-        <div class="row g-3">
+    <div class="subheader-bar">
+        <nav class="subheader-tabs">
+            <a href="{% url 'violations:dashboard' %}" class="subheader-tab active">
+                <i class="bi bi-chat-dots me-1"></i>Chat Box
+            </a>
+            <a href="{% url 'violations:statistics' %}" class="subheader-tab">
+                <i class="bi bi-bar-chart me-1"></i>Statistics
+            </a>
+            <span class="subheader-spacer"></span>
+            <small class="subheader-status text-muted" id="live-connection-status">Connecting…</small>
+        </nav>
+    </div>
 
-            <!-- Live Feed -->
-            <div class="col-12">
-                <div class="live-header d-flex justify-content-between align-items-center mb-2">
-                    <h5 class="mb-0">Live Incident Feed</h5>
-                    <small class="text-muted" id="live-connection-status">Connecting websocket...</small>
-                </div>
-                <div class="card border-0 shadow-sm">
-                    <div class="card-body p-2 p-md-3">
-                        <div id="incident-feed" class="incident-feed">
-                            <div id="incident-top-status" class="incident-top-status text-center small text-muted"></div>
-                            <div id="incident-list-container"
-                                 data-oldest-id="{{ oldest_incident_id|default:'' }}"
-                                 data-newest-id="{{ newest_incident_id|default:'' }}"
-                                 data-has-older="{{ has_older|yesno:'1,0' }}">
-                                {% include 'violations/_incident_list.html' %}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Post form -->
-            {% if can_post %}
-            <div class="col-12">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-body">
-                        <form method="post" action="{% url 'violations:create_incident' %}"
-                              enctype="multipart/form-data" class="row g-2 align-items-start"
-                              id="create-incident-form" novalidate>
-                            {% csrf_token %}
-
-                            <!-- SBD -->
-                            <div class="col-12 col-md-2">
-                                <label class="form-label small mb-1" for="id_sbd">SBD</label>
-                                <input type="text" name="sbd" id="id_sbd" class="form-control"
-                                       placeholder="TS0032"
-                                       pattern="[A-Za-z0-9]{1,9}"
-                                       maxlength="9"
-                                       title="Chỉ chữ cái tiếng Anh và chữ số (tối đa 9 ký tự)"
-                                       required autocomplete="off">
-                                <div class="invalid-feedback" id="sbd-error"></div>
-                            </div>
-
-                            <!-- Violation Content: Input/Preview tabs -->
-                            <div class="col-12 col-md-7">
-                                <label class="form-label small mb-1">Violation Content</label>
-                                <div class="md-editor-wrap mention-textarea-wrap" id="md-editor-main">
-                                    <!-- Tab switcher -->
-                                    <div class="md-tab-bar">
-                                        <button type="button" class="md-tab-btn active" data-tab="input">
-                                            <i class="bi bi-pencil me-1"></i>Input
-                                        </button>
-                                        <button type="button" class="md-tab-btn" data-tab="preview">
-                                            <i class="bi bi-eye me-1"></i>Preview
-                                        </button>
-                                    </div>
-
-                                    <!-- Input pane -->
-                                    <div class="md-pane md-pane-input">
-                                        <div class="md-toolbar" data-target="id_violation_text">
-                                            <button type="button" class="md-tb-btn" data-action="undo"      title="Undo (Ctrl+Z)"><i class="bi bi-arrow-counterclockwise"></i></button>
-                                            <button type="button" class="md-tb-btn" data-action="redo"      title="Redo (Ctrl+Y)"><i class="bi bi-arrow-clockwise"></i></button>
-                                            <span class="md-tb-sep"></span>
-                                            <button type="button" class="md-tb-btn" data-action="bold"      title="Bold (Ctrl+B)"><i class="bi bi-type-bold"></i></button>
-                                            <button type="button" class="md-tb-btn" data-action="italic"    title="Italic (Ctrl+I)"><i class="bi bi-type-italic"></i></button>
-                                            <button type="button" class="md-tb-btn" data-action="strike"    title="Strikethrough"><i class="bi bi-type-strikethrough"></i></button>
-                                            <span class="md-tb-sep"></span>
-                                            <button type="button" class="md-tb-btn" data-action="code"      title="Inline code"><i class="bi bi-code"></i></button>
-                                            <button type="button" class="md-tb-btn" data-action="codeblock" title="Code block"><i class="bi bi-code-square"></i></button>
-                                            <button type="button" class="md-tb-btn" data-action="quote"     title="Blockquote"><i class="bi bi-blockquote-left"></i></button>
-                                            <span class="md-tb-sep"></span>
-                                            <button type="button" class="md-tb-btn" data-action="ul"        title="Unordered list"><i class="bi bi-list-ul"></i></button>
-                                            <button type="button" class="md-tb-btn" data-action="ol"        title="Ordered list"><i class="bi bi-list-ol"></i></button>
-                                            <span class="md-tb-sep"></span>
-                                            <button type="button" class="md-tb-btn" data-action="link"      title="Link (Ctrl+K)"><i class="bi bi-link-45deg"></i></button>
-                                            <button type="button" class="md-tb-btn" data-action="image"     title="Inline image (via URL)"><i class="bi bi-image"></i></button>
-                                            <button type="button" class="md-tb-btn" data-action="upload"    title="Upload image from device"><i class="bi bi-cloud-upload"></i></button>
-                                            <span class="md-tb-sep"></span>
-                                            <button type="button" class="md-tb-btn md-tb-mention" data-action="mention" title="Mention SBD (@)"><i class="bi bi-person-fill"></i></button>
-                                        </div>
-                                        <textarea name="violation_text" id="id_violation_text"
-                                                  class="form-control md-textarea" rows="4"
-                                                  placeholder="Nhập nội dung vi phạm..."
-                                                  required></textarea>
-                                        <div class="mention-dropdown" role="listbox"></div>
-                                    </div>
-
-                                    <!-- Preview pane -->
-                                    <div class="md-pane md-pane-preview" style="display:none;">
-                                        <div class="md-preview-content markdown-body"></div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Video evidence -->
-                            <div class="col-12 col-md-2">
-                                <label class="form-label small mb-1" for="id_evidence">
-                                    <i class="bi bi-camera-video me-1"></i>Video
-                                </label>
-                                <input type="file" name="evidence" id="id_evidence"
-                                       class="form-control" accept="video/*">
-                                <div class="form-text small">mp4, mov, webm…</div>
-                            </div>
-
-                            <!-- Submit -->
-                            <div class="col-12 col-md-1 d-grid">
-                                <label class="form-label small mb-1 d-none d-md-block">&nbsp;</label>
-                                <button class="btn btn-dark" type="submit">
-                                    <i class="bi bi-send"></i>
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-            {% else %}
-            <div class="col-12">
-                <div class="alert alert-secondary mb-0">
-                    This account can view data only. Posting/editing is allowed only for room admins and super admins.
-                </div>
-            </div>
-            {% endif %}
-
+    <div class="feed-area" id="incident-feed">
+        <div id="incident-top-status" class="incident-top-status text-center small text-muted"></div>
+        <div id="incident-list-container"
+             data-oldest-id="{{ oldest_incident_id|default:'' }}"
+             data-newest-id="{{ newest_incident_id|default:'' }}"
+             data-has-older="{{ has_older|yesno:'1,0' }}">
+            {% include 'violations/_incident_list.html' %}
         </div>
-    </section>
+    </div>
 </div>
 
-<!-- Suggest tooltip -->
 <div id="mention-suggest-tip" class="mention-suggest-tip" role="tooltip"></div>
 
-<!-- Candidate Detail offcanvas -->
 <div class="offcanvas offcanvas-end candidate-offcanvas" tabindex="-1"
      id="candidateDetailCanvas" aria-labelledby="candidateDetailLabel">
     <div class="offcanvas-header border-bottom">
@@ -163,4 +43,117 @@
         <div class="text-center py-4 text-muted">Select a candidate from statistics.</div>
     </div>
 </div>
+{% endblock %}
+
+{% block bottom_bar %}
+{% if can_post %}
+<form method="post" action="{% url 'violations:create_incident' %}"
+      enctype="multipart/form-data"
+      id="create-incident-form"
+      class="compose-bar compose-bar--simple"
+      data-mode="simple"
+      novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="is_markdown" id="id_is_markdown" value="0">
+
+    <div class="compose-simple">
+        <div class="compose-sbd">
+            <input type="text" name="sbd" id="id_sbd"
+                   class="form-control"
+                   placeholder="TS0032"
+                   pattern="[A-Za-z0-9]{1,9}"
+                   maxlength="9"
+                   title="SBD"
+                   required autocomplete="off">
+            <div class="invalid-feedback" id="sbd-error"></div>
+        </div>
+
+        <div class="compose-text-wrap mention-textarea-wrap">
+            <input type="text" name="violation_text" id="id_violation_text_simple"
+                   class="form-control compose-simple-input"
+                   placeholder="Nhập nội dung vi phạm…"
+                   autocomplete="off">
+            <button type="button"
+                    class="compose-expand-btn"
+                    id="compose-expand-btn"
+                    title="Mở rộng (Markdown)">
+                <i class="bi bi-arrows-fullscreen"></i>
+            </button>
+            <div class="mention-dropdown" role="listbox"></div>
+        </div>
+
+        <label class="compose-video" for="id_evidence" title="Đính kèm video">
+            <i class="bi bi-camera-video"></i>
+            <input type="file" name="evidence" id="id_evidence"
+                   class="d-none" accept="video/*">
+            <span class="compose-video-filename small text-muted" id="video-filename"></span>
+        </label>
+
+        <button class="btn btn-dark compose-send" type="submit" title="Gửi">
+            <i class="bi bi-send"></i>
+        </button>
+    </div>
+
+    <div class="compose-expanded" id="compose-expanded" hidden>
+        <div class="md-editor-wrap" id="md-editor-main">
+
+            <div class="md-tab-bar">
+                <button type="button" class="md-tab-btn active" data-tab="input">
+                    <i class="bi bi-pencil me-1"></i>Input
+                </button>
+                <button type="button" class="md-tab-btn" data-tab="preview">
+                    <i class="bi bi-eye me-1"></i>Preview
+                </button>
+                <span class="md-tab-spacer"></span>
+                <button type="button" class="md-collapse-btn" id="compose-collapse-btn" title="Thu nhỏ">
+                    <i class="bi bi-arrows-angle-contract"></i>
+                </button>
+            </div>
+
+            <div class="md-pane md-pane-input">
+                <div class="md-toolbar" data-target="id_violation_text_full">
+                    <button type="button" class="md-tb-btn" data-action="undo"      title="Undo (Ctrl+Z)"><i class="bi bi-arrow-counterclockwise"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="redo"      title="Redo (Ctrl+Y)"><i class="bi bi-arrow-clockwise"></i></button>
+                    <span class="md-tb-sep"></span>
+                    <button type="button" class="md-tb-btn" data-action="bold"      title="Bold (Ctrl+B)"><i class="bi bi-type-bold"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="italic"    title="Italic (Ctrl+I)"><i class="bi bi-type-italic"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="strike"    title="Strikethrough"><i class="bi bi-type-strikethrough"></i></button>
+                    <span class="md-tb-sep"></span>
+                    <button type="button" class="md-tb-btn" data-action="code"      title="Inline code"><i class="bi bi-code"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="codeblock" title="Code block"><i class="bi bi-code-square"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="quote"     title="Blockquote"><i class="bi bi-blockquote-left"></i></button>
+                    <span class="md-tb-sep"></span>
+                    <button type="button" class="md-tb-btn" data-action="ul"        title="Unordered list"><i class="bi bi-list-ul"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="ol"        title="Ordered list"><i class="bi bi-list-ol"></i></button>
+                    <span class="md-tb-sep"></span>
+                    <button type="button" class="md-tb-btn" data-action="link"      title="Link (Ctrl+K)"><i class="bi bi-link-45deg"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="image"     title="Inline image (via URL)"><i class="bi bi-image"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="upload"    title="Upload image from device"><i class="bi bi-cloud-upload"></i></button>
+                    <span class="md-tb-sep"></span>
+                    <button type="button" class="md-tb-btn md-tb-mention" data-action="mention" title="Mention SBD (@)"><i class="bi bi-person-fill"></i></button>
+                </div>
+                <div class="mention-textarea-wrap">
+                    <textarea name="violation_text_full" id="id_violation_text_full"
+                              class="form-control md-textarea" rows="6"
+                              placeholder="Nhập nội dung vi phạm…"></textarea>
+                    <div class="mention-dropdown" role="listbox"></div>
+                </div>
+            </div>
+
+            <div class="md-pane md-pane-preview" style="display:none;">
+                <div class="md-preview-content markdown-body" id="md-preview-content"></div>
+                <div class="md-preview-footer">
+                    <button type="button" class="btn btn-sm btn-outline-secondary md-preview-reload" id="md-preview-reload">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Reload preview
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+{% else %}
+<div class="compose-bar compose-bar--viewer">
+    <span class="text-muted small"><i class="bi bi-eye me-1"></i>Read-only viewer — posting is reserved for admins.</span>
+</div>
+{% endif %}
 {% endblock %}

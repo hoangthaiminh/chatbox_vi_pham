@@ -1,69 +1,68 @@
 {% extends 'violations/base.html' %}
 
 {% block content %}
-<!-- Tab bar — full width, sticky -->
-<div class="page-tabs-bar mb-0">
-    <ul class="nav nav-pills panel-tabs" id="monitor-tabs" role="tablist" style="max-width:320px;">
-        <li class="nav-item" role="presentation">
-            <a class="nav-link" href="{% url 'violations:dashboard' %}">Chat Box</a>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" type="button" aria-current="page">Statistics</button>
-        </li>
-    </ul>
-</div>
+<div class="messenger-shell">
 
-<div class="pt-3" id="monitor-tabs-content"
-     data-ws-path="/ws/live/"
-     data-updates-url="{% url 'violations:incident_updates' %}">
+    <div class="subheader-bar">
+        <nav class="subheader-tabs">
+            <a href="{% url 'violations:dashboard' %}" class="subheader-tab">
+                <i class="bi bi-chat-dots me-1"></i>Chat Box
+            </a>
+            <a href="{% url 'violations:statistics' %}" class="subheader-tab active">
+                <i class="bi bi-bar-chart me-1"></i>Statistics
+            </a>
+            <span class="subheader-spacer"></span>
+        </nav>
+    </div>
 
-    <div class="row g-3">
+    <div class="feed-area feed-area--no-compose">
+        <div class="row g-3">
 
-        {% if can_import_candidates %}
-        <div class="col-12">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body">
-                    <h6 class="mb-2">Import Candidate List (CSV)</h6>
-                    <form method="post" action="{% url 'violations:import_candidates' %}"
-                          enctype="multipart/form-data" class="row g-2 align-items-end">
-                        {% csrf_token %}
-                        <div class="col-12 col-md-8">
-                            <label class="form-label small mb-1" for="id_csv_file">CSV File</label>
-                            <input type="file" name="csv_file" id="id_csv_file"
-                                   class="form-control" accept=".csv" required>
-                        </div>
-                        <div class="col-12 col-md-4 d-grid">
-                            <button class="btn btn-outline-dark" type="submit">
-                                <i class="bi bi-upload me-1"></i>Import / Update Candidates
-                            </button>
-                        </div>
-                    </form>
-                    <p class="small text-muted mt-2 mb-0">
-                        Suggested headers: SBD, Ho va ten, Truong, GVPT, Phong thi.
-                    </p>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <div class="col-12">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="mb-0">Violation Statistics</h5>
-                        <small class="text-muted">Click an SBD to view full detail</small>
-                    </div>
-                    <div id="stats-table-container">
-                        {% include 'violations/_stats_table.html' %}
+            {% if can_import_candidates %}
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <h6 class="mb-2">Import Candidate List (CSV)</h6>
+                        <form method="post" action="{% url 'violations:import_candidates' %}"
+                              enctype="multipart/form-data" class="row g-2 align-items-end">
+                            {% csrf_token %}
+                            <div class="col-12 col-md-8">
+                                <label class="form-label small mb-1" for="id_csv_file">CSV File</label>
+                                <input type="file" name="csv_file" id="id_csv_file"
+                                       class="form-control" accept=".csv" required>
+                            </div>
+                            <div class="col-12 col-md-4 d-grid">
+                                <button class="btn btn-outline-dark" type="submit">
+                                    <i class="bi bi-upload me-1"></i>Import / Update Candidates
+                                </button>
+                            </div>
+                        </form>
+                        <p class="small text-muted mt-2 mb-0">
+                            Suggested headers: SBD, Ho va ten, Truong, GVPT, Phong thi.
+                        </p>
                     </div>
                 </div>
             </div>
-        </div>
+            {% endif %}
 
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0">Violation Statistics</h5>
+                            <small class="text-muted">Click an SBD to view full detail</small>
+                        </div>
+                        <div id="stats-table-container">
+                            {% include 'violations/_stats_table.html' %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
     </div>
 </div>
 
-<!-- Candidate Detail offcanvas -->
 <div class="offcanvas offcanvas-end candidate-offcanvas" tabindex="-1"
      id="candidateDetailCanvas" aria-labelledby="candidateDetailLabel">
     <div class="offcanvas-header border-bottom">

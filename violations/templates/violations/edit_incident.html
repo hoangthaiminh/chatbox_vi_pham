@@ -12,7 +12,6 @@
                       id="edit-incident-form" novalidate>
                     {% csrf_token %}
 
-                    <!-- SBD -->
                     <div class="col-md-3">
                         <label for="id_sbd" class="form-label">SBD</label>
                         <input type="text" name="sbd" id="id_sbd" class="form-control"
@@ -24,11 +23,10 @@
                         <div class="invalid-feedback" id="sbd-error"></div>
                     </div>
 
-                    <!-- Violation Content: Input/Preview tabs -->
                     <div class="col-md-9">
                         <label class="form-label">Violation Content</label>
                         <div class="md-editor-wrap mention-textarea-wrap" id="md-editor-main">
-                            <!-- Tab switcher -->
+
                             <div class="md-tab-bar">
                                 <button type="button" class="md-tab-btn active" data-tab="input">
                                     <i class="bi bi-pencil me-1"></i>Input
@@ -38,7 +36,6 @@
                                 </button>
                             </div>
 
-                            <!-- Input pane -->
                             <div class="md-pane md-pane-input">
                                 <div class="md-toolbar" data-target="id_violation_text">
                                     <button type="button" class="md-tb-btn" data-action="undo"      title="Undo (Ctrl+Z)"><i class="bi bi-arrow-counterclockwise"></i></button>
@@ -67,14 +64,12 @@
                                 <div class="mention-dropdown" role="listbox"></div>
                             </div>
 
-                            <!-- Preview pane -->
                             <div class="md-pane md-pane-preview" style="display:none;">
                                 <div class="md-preview-content markdown-body"></div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Video evidence -->
                     <div class="col-md-8">
                         <label for="id_evidence" class="form-label">
                             <i class="bi bi-camera-video me-1"></i>Replace Video (optional)
@@ -101,7 +96,6 @@
     </div>
 </div>
 
-<!-- Candidate Detail offcanvas -->
 <div class="offcanvas offcanvas-end candidate-offcanvas" tabindex="-1"
      id="candidateDetailCanvas" aria-labelledby="candidateDetailLabel">
     <div class="offcanvas-header border-bottom">

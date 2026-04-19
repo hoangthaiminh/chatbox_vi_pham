@@ -35,8 +35,8 @@ class IncidentBaseForm(forms.Form):
             raise forms.ValidationError("SBD cannot be empty.")
         if not is_valid_sbd_syntax(value):
             raise forms.ValidationError(
-                "SBD chỉ được chứa chữ cái tiếng Anh (a-z, A-Z) và chữ số (0-9), "
-                f"tối đa {MAX_SBD_LENGTH} ký tự. Không được có dấu cách, ký tự đặc biệt hoặc chữ tiếng Việt."
+                "SBD phải từ 2 đến 9 ký tự, chỉ gồm chữ cái (a-z, A-Z) và/hoặc chữ số (0-9). "
+                "Không được có dấu cách, ký tự đặc biệt hoặc chữ tiếng Việt."
             )
         return value.upper()
 
