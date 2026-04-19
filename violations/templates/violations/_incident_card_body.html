@@ -52,9 +52,10 @@
 
 {% if incident.evidence and incident.pk %}
     {% if incident.evidence_is_video %}
-        <div class="incident-video-wrap mt-3"
+        <div class="incident-video-wrap evidence-wrap evidence-wrap-loading mt-3"
+             style="--evidence-ar: {{ incident.evidence_aspect_ratio }}; --evidence-natural-w: {{ incident.evidence_natural_width }};"
              data-video-src="{% url 'violations:incident_evidence' incident.pk %}">
-            <video class="incident-video-thumb evidence-guard"
+            <video class="incident-video-thumb evidence-guard js-evidence-media evidence-media"
                    preload="metadata"
                    muted
                    controlsList="nodownload noplaybackrate"
@@ -68,9 +69,10 @@
             </div>
         </div>
     {% elif incident.evidence_is_image %}
-        <div class="incident-img-wrap mt-3">
+        <div class="incident-img-wrap evidence-wrap evidence-wrap-loading mt-3"
+             style="--evidence-ar: {{ incident.evidence_aspect_ratio }}; --evidence-natural-w: {{ incident.evidence_natural_width }};">
             <img src="{% url 'violations:incident_evidence' incident.pk %}"
-                 class="incident-legacy-img evidence-guard"
+                 class="incident-legacy-img evidence-guard js-evidence-media evidence-media"
                  alt="Evidence image"
                  draggable="false"
                  loading="lazy"

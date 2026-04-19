@@ -41,10 +41,15 @@
             <div class="mb-2 chat-text markdown-body">{{ incident.violation_text|render_violation:incident.is_markdown }}</div>
             {% if incident.evidence %}
                 {% if incident.evidence_is_image %}
-                    <img src="{% url 'violations:incident_evidence' incident.pk %}" class="incident-legacy-img evidence-guard" alt="Evidence" draggable="false" loading="lazy" data-lg-src="{% url 'violations:incident_evidence' incident.pk %}">
+                    <div class="incident-img-wrap evidence-wrap evidence-wrap-loading mt-2"
+                         style="--evidence-ar: {{ incident.evidence_aspect_ratio }}; --evidence-natural-w: {{ incident.evidence_natural_width }};">
+                        <img src="{% url 'violations:incident_evidence' incident.pk %}" class="incident-legacy-img evidence-guard js-evidence-media evidence-media" alt="Evidence" draggable="false" loading="lazy" data-lg-src="{% url 'violations:incident_evidence' incident.pk %}">
+                    </div>
                 {% elif incident.evidence_is_video %}
-                    <div class="incident-video-wrap mt-2" data-video-src="{% url 'violations:incident_evidence' incident.pk %}">
-                        <video class="incident-video-thumb evidence-guard" preload="metadata" muted controlsList="nodownload noplaybackrate" disablePictureInPicture oncontextmenu="return false">
+                    <div class="incident-video-wrap evidence-wrap evidence-wrap-loading mt-2"
+                         style="--evidence-ar: {{ incident.evidence_aspect_ratio }}; --evidence-natural-w: {{ incident.evidence_natural_width }};"
+                         data-video-src="{% url 'violations:incident_evidence' incident.pk %}">
+                        <video class="incident-video-thumb evidence-guard js-evidence-media evidence-media" preload="metadata" muted controlsList="nodownload noplaybackrate" disablePictureInPicture oncontextmenu="return false">
                             <source src="{% url 'violations:incident_evidence' incident.pk %}">
                         </video>
                         <div class="video-play-overlay" aria-label="Play video">
