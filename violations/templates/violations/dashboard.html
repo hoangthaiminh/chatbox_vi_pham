@@ -3,7 +3,7 @@
 {% block content %}
 <div class="chat-layout" id="monitor-tabs-content" data-ws-path="/ws/live/" data-history-url="{% url 'violations:incident_history' %}" data-updates-url="{% url 'violations:incident_updates' %}">
     <div class="live-header d-flex justify-content-between align-items-center mb-2">
-        <small class="text-muted" id="live-connection-status">Connecting websocket...</small>
+        <small class="text-muted" id="live-connection-status">Đang kết nối...</small>
     </div>
 
     <div id="incident-feed" class="incident-feed incident-feed-fullscreen">
@@ -20,11 +20,11 @@
 <div class="offcanvas offcanvas-end candidate-offcanvas" tabindex="-1"
      id="candidateDetailCanvas" aria-labelledby="candidateDetailLabel">
     <div class="offcanvas-header border-bottom">
-        <h5 class="offcanvas-title" id="candidateDetailLabel">Candidate Detail</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        <h5 class="offcanvas-title" id="candidateDetailLabel">Thông tin Thí sinh</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Đóng"></button>
     </div>
     <div class="offcanvas-body" id="candidate-detail-content">
-        <div class="text-center py-4 text-muted">Select a candidate from statistics.</div>
+        <div class="text-center py-4 text-muted">Chọn một thí sinh từ bảng thống kê.</div>
     </div>
 </div>
 {% endblock %}
@@ -50,6 +50,13 @@
                    title="SBD"
                    required autocomplete="off">
             <div class="invalid-feedback" id="sbd-error"></div>
+        </div>
+
+        <div class="compose-kind">
+            <select name="incident_kind" id="id_incident_kind" class="form-select" title="Phân loại lỗi">
+                <option value="violation" selected>Vi phạm</option>
+                <option value="reminder">Nhắc nhở</option>
+            </select>
         </div>
 
         <div class="compose-text-wrap mention-textarea-wrap">
@@ -83,10 +90,10 @@
 
             <div class="md-tab-bar">
                 <button type="button" class="md-tab-btn active" data-tab="input">
-                    <i class="bi bi-pencil me-1"></i>Input
+                    <i class="bi bi-pencil me-1"></i>Nhập
                 </button>
                 <button type="button" class="md-tab-btn" data-tab="preview">
-                    <i class="bi bi-eye me-1"></i>Preview
+                    <i class="bi bi-eye me-1"></i>Xem trước
                 </button>
                 <span class="md-tab-spacer"></span>
                 <button type="button" class="md-collapse-btn" id="compose-collapse-btn" title="Thu nhỏ">
@@ -96,25 +103,25 @@
 
             <div class="md-pane md-pane-input">
                 <div class="md-toolbar" data-target="id_violation_text_full">
-                    <button type="button" class="md-tb-btn" data-action="undo"      title="Undo (Ctrl+Z)"><i class="bi bi-arrow-counterclockwise"></i></button>
-                    <button type="button" class="md-tb-btn" data-action="redo"      title="Redo (Ctrl+Y)"><i class="bi bi-arrow-clockwise"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="undo"      title="Hoàn tác (Ctrl+Z)"><i class="bi bi-arrow-counterclockwise"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="redo"      title="Làm lại (Ctrl+Y)"><i class="bi bi-arrow-clockwise"></i></button>
                     <span class="md-tb-sep"></span>
-                    <button type="button" class="md-tb-btn" data-action="bold"      title="Bold (Ctrl+B)"><i class="bi bi-type-bold"></i></button>
-                    <button type="button" class="md-tb-btn" data-action="italic"    title="Italic (Ctrl+I)"><i class="bi bi-type-italic"></i></button>
-                    <button type="button" class="md-tb-btn" data-action="strike"    title="Strikethrough"><i class="bi bi-type-strikethrough"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="bold"      title="In đậm (Ctrl+B)"><i class="bi bi-type-bold"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="italic"    title="In nghiêng (Ctrl+I)"><i class="bi bi-type-italic"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="strike"    title="Gạch ngang"><i class="bi bi-type-strikethrough"></i></button>
                     <span class="md-tb-sep"></span>
-                    <button type="button" class="md-tb-btn" data-action="code"      title="Inline code"><i class="bi bi-code"></i></button>
-                    <button type="button" class="md-tb-btn" data-action="codeblock" title="Code block"><i class="bi bi-code-square"></i></button>
-                    <button type="button" class="md-tb-btn" data-action="quote"     title="Blockquote"><i class="bi bi-blockquote-left"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="code"      title="Mã lệnh"><i class="bi bi-code"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="codeblock" title="Khối mã"><i class="bi bi-code-square"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="quote"     title="Trích dẫn"><i class="bi bi-blockquote-left"></i></button>
                     <span class="md-tb-sep"></span>
-                    <button type="button" class="md-tb-btn" data-action="ul"        title="Unordered list"><i class="bi bi-list-ul"></i></button>
-                    <button type="button" class="md-tb-btn" data-action="ol"        title="Ordered list"><i class="bi bi-list-ol"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="ul"        title="Danh sách không thứ tự"><i class="bi bi-list-ul"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="ol"        title="Danh sách có thứ tự"><i class="bi bi-list-ol"></i></button>
                     <span class="md-tb-sep"></span>
-                    <button type="button" class="md-tb-btn" data-action="link"      title="Link (Ctrl+K)"><i class="bi bi-link-45deg"></i></button>
-                    <button type="button" class="md-tb-btn" data-action="image"     title="Inline image (via URL)"><i class="bi bi-image"></i></button>
-                    <button type="button" class="md-tb-btn" data-action="upload"    title="Upload image from device"><i class="bi bi-cloud-upload"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="link"      title="Liên kết (Ctrl+K)"><i class="bi bi-link-45deg"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="image"     title="Chèn ảnh (qua URL)"><i class="bi bi-image"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="upload"    title="Tải ảnh từ thiết bị"><i class="bi bi-cloud-upload"></i></button>
                     <span class="md-tb-sep"></span>
-                    <button type="button" class="md-tb-btn md-tb-mention" data-action="mention" title="Mention SBD (@)"><i class="bi bi-person-fill"></i></button>
+                    <button type="button" class="md-tb-btn md-tb-mention" data-action="mention" title="Nhắc SBD (@)"><i class="bi bi-person-fill"></i></button>
                 </div>
                 <div class="mention-textarea-wrap">
                     <textarea name="violation_text_full" id="id_violation_text_full"
@@ -128,7 +135,7 @@
                 <div class="md-preview-content markdown-body" id="md-preview-content"></div>
                 <div class="md-preview-footer">
                     <button type="button" class="btn btn-sm btn-outline-secondary md-preview-reload" id="md-preview-reload">
-                        <i class="bi bi-arrow-clockwise me-1"></i>Reload preview
+                        <i class="bi bi-arrow-clockwise me-1"></i>Tải lại xem trước
                     </button>
                 </div>
             </div>
@@ -137,7 +144,7 @@
 </form>
 {% else %}
 <div class="compose-bar compose-bar--viewer">
-    <span class="text-muted small"><i class="bi bi-eye me-1"></i>Read-only viewer — posting is reserved for admins.</span>
+    <span class="text-muted small"><i class="bi bi-eye me-1"></i>Chế độ chỉ xem — chỉ Admin mới được đăng tin nhắn.</span>
 </div>
 {% endif %}
 {% endblock %}

@@ -35,8 +35,8 @@ class RoomAdminProfile(models.Model):
     room_name = models.CharField(max_length=50)
 
     class Meta:
-        verbose_name = "Room Admin Profile"
-        verbose_name_plural = "Room Admin Profiles"
+        verbose_name = "Hồ sơ Quản trị phòng"
+        verbose_name_plural = "Hồ sơ Quản trị phòng"
 
     def save(self, *args, **kwargs):
         self.room_name = self.room_name.strip()
@@ -47,6 +47,13 @@ class RoomAdminProfile(models.Model):
 
 
 class Incident(models.Model):
+    KIND_VIOLATION = "violation"
+    KIND_REMINDER = "reminder"
+    INCIDENT_KIND_CHOICES = [
+        (KIND_VIOLATION, "Vi phạm"),
+        (KIND_REMINDER, "Nhắc nhở"),
+    ]
+
     reported_sbd = models.CharField(max_length=9, db_index=True)
     reported_candidate = models.ForeignKey(
         Candidate,
@@ -55,13 +62,19 @@ class Incident(models.Model):
         blank=True,
         related_name="reported_incidents",
     )
+    incident_kind = models.CharField(
+        max_length=20,
+        choices=INCIDENT_KIND_CHOICES,
+        default=KIND_VIOLATION,
+        db_index=True,
+    )
     violation_text = models.TextField()
     is_markdown = models.BooleanField(
         default=False,
         help_text=(
-            "True when the author composed in the expanded Markdown editor; "
-            "False for quick single-line sends where the text should be "
-            "rendered as plain text (with mention resolution only)."
+            "Bật khi nội dung được soạn bằng trình Markdown mở rộng; "
+            "tắt với tin nhắn một dòng nhanh, khi đó văn bản sẽ được hiển thị "
+            "dạng thuần (chỉ xử lý SBD được nhắc)."
         ),
     )
     evidence = models.FileField(upload_to="evidence/%Y/%m/%d/", blank=True, null=True)
@@ -78,6 +91,13 @@ class Incident(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+    @classmethod
+    def normalize_incident_kind(cls, value):
+        normalized = (value or "").strip().lower()
+        if normalized in {cls.KIND_VIOLATION, cls.KIND_REMINDER}:
+            return normalized
+        return cls.KIND_VIOLATION
 
     def save(self, *args, **kwargs):
         self.reported_sbd = self.reported_sbd.upper().strip()
@@ -155,8 +175,8 @@ class IncidentParticipant(models.Model):
     RELATION_REPORTED = "reported"
     RELATION_MENTIONED = "mentioned"
     RELATION_CHOICES = [
-        (RELATION_REPORTED, "Reported"),
-        (RELATION_MENTIONED, "Mentioned"),
+        (RELATION_REPORTED, "Đối tượng chính"),
+        (RELATION_MENTIONED, "Được nhắc"),
     ]
 
     incident = models.ForeignKey(

@@ -86,7 +86,7 @@ def role_label(user):
         return f"{ROLE_LABELS[ROLE_ROOM_ADMIN]} ({room})" if room else ROLE_LABELS[ROLE_ROOM_ADMIN]
     if user.is_authenticated:
         return ROLE_LABELS[ROLE_VIEWER]
-    return "Guest Viewer"
+    return "Khách xem"
 
 
 def normalize_header(value):
@@ -151,13 +151,13 @@ def statistics(request):
 def create_incident(request):
     if not can_post_message(request.user):
         if is_ajax_request(request):
-            return JsonResponse({"ok": False, "error": "You do not have permission to post incidents."}, status=403)
-        return HttpResponseForbidden("You do not have permission to post incidents.")
+            return JsonResponse({"ok": False, "error": "Bạn không có quyền gửi sự việc."}, status=403)
+        return HttpResponseForbidden("Bạn không có quyền gửi sự việc.")
 
     raw_sbd = (request.POST.get("sbd") or "").strip()
     if not is_valid_sbd_syntax(raw_sbd):
         if is_ajax_request(request):
-            return JsonResponse({"ok": False, "error": "SBD is invalid."}, status=400)
+            return JsonResponse({"ok": False, "error": "SBD không hợp lệ."}, status=400)
         messages.error(request, "SBD không hợp lệ: chỉ dùng chữ cái tiếng Anh và chữ số.")
         return redirect("violations:dashboard")
 
@@ -165,19 +165,19 @@ def create_incident(request):
     if not form.is_valid():
         if is_ajax_request(request):
             error_text = "; ".join(
-                f"{field.replace('_', ' ').title()}: {', '.join(errors)}"
+                f"{getattr(form.fields.get(field), 'label', field)}: {', '.join(errors)}"
                 for field, errors in form.errors.items()
             )
             return JsonResponse(
                 {
                     "ok": False,
-                    "error": error_text or "Invalid incident data.",
+                    "error": error_text or "Dữ liệu sự việc không hợp lệ.",
                     "errors": form.errors,
                 },
                 status=400,
             )
         for field, errors in form.errors.items():
-            label = field.replace("_", " ").title()
+            label = getattr(form.fields.get(field), "label", field)
             for error in errors:
                 messages.error(request, f"{label}: {error}")
         return redirect("violations:dashboard")
@@ -204,6 +204,7 @@ def create_incident(request):
         incident=incident,
         primary_sbd=form.cleaned_data["sbd"],
         violation_text=form.cleaned_data["violation_text"],
+        incident_kind=form.cleaned_data["incident_kind"],
     )
     notify_live_update()
 
@@ -221,7 +222,7 @@ def create_incident(request):
 
     _surface_truncation_warnings(request, sync_info)
 
-    messages.success(request, "Incident posted successfully.")
+    messages.success(request, "Đã gửi sự việc thành công.")
     return redirect("violations:dashboard")
 
 
@@ -264,10 +265,11 @@ def _surface_truncation_warnings(request, sync_info):
 def edit_incident(request, pk):
     incident = get_object_or_404(Incident, pk=pk)
     if not incident.can_edit(request.user):
-        return HttpResponseForbidden("You do not have permission to edit this incident.")
+        return HttpResponseForbidden("Bạn không có quyền sửa sự việc này.")
 
     initial_data = {
         "sbd": incident.reported_sbd,
+        "incident_kind": incident.incident_kind,
         "violation_text": incident.violation_text,
     }
 
@@ -301,14 +303,15 @@ def edit_incident(request, pk):
                 incident=incident,
                 primary_sbd=form.cleaned_data["sbd"],
                 violation_text=form.cleaned_data["violation_text"],
+                incident_kind=form.cleaned_data["incident_kind"],
             )
             _surface_truncation_warnings(request, sync_info)
             notify_live_update()
-            messages.success(request, "Incident updated successfully.")
+            messages.success(request, "Đã cập nhật sự việc thành công.")
             return redirect("violations:dashboard")
         else:
             for field, errors in form.errors.items():
-                label = field.replace("_", " ").title()
+                label = getattr(form.fields.get(field), "label", field)
                 for error in errors:
                     messages.error(request, f"{label}: {error}")
     else:
@@ -330,8 +333,8 @@ def edit_incident(request, pk):
 def delete_incident(request, pk):
     if not can_delete_incidents(request.user):
         if is_ajax_request(request):
-            return JsonResponse({"error": "You do not have permission to delete incidents."}, status=403)
-        return HttpResponseForbidden("You do not have permission to delete incidents.")
+            return JsonResponse({"error": "Bạn không có quyền xoá sự việc."}, status=403)
+        return HttpResponseForbidden("Bạn không có quyền xoá sự việc.")
 
     incident = get_object_or_404(Incident, pk=pk)
     if incident.evidence:
@@ -342,7 +345,7 @@ def delete_incident(request, pk):
     if is_ajax_request(request):
         return JsonResponse({"ok": True, "incident_id": pk})
 
-    messages.success(request, "Message deleted successfully.")
+    messages.success(request, "Đã xoá tin nhắn thành công.")
     return redirect("violations:dashboard")
 
 
@@ -351,7 +354,7 @@ def delete_incident(request, pk):
 @require_GET
 def candidate_detail(request, sbd):
     if len(sbd) > _MAX_SBD_URL_LEN or not is_valid_sbd_syntax(sbd):
-        raise Http404("Invalid SBD.")
+        raise Http404("SBD không hợp lệ.")
 
     normalized_sbd, _ = apply_default_prefix(sbd)
     candidate = Candidate.objects.filter(sbd__iexact=normalized_sbd).first()
@@ -361,10 +364,30 @@ def candidate_detail(request, sbd):
         .distinct()
         .order_by("-created_at")
     )
+
+    violation_count = 0
+    reminder_count = 0
+    for incident in incidents:
+        if incident.incident_kind == Incident.KIND_REMINDER:
+            reminder_count += 1
+        else:
+            violation_count += 1
+    effective_violations = violation_count + (reminder_count // 2)
+
     return render(
         request,
         "violations/_candidate_detail.html",
-        {"candidate": candidate, "sbd": normalized_sbd, "incidents": incidents},
+        {
+            "candidate": candidate,
+            "sbd": normalized_sbd,
+            "incidents": incidents,
+            "rule_summary": {
+                "violation_count": violation_count,
+                "reminder_count": reminder_count,
+                "effective_violations": effective_violations,
+                "is_out": effective_violations >= 2,
+            },
+        },
     )
 
 
@@ -374,7 +397,7 @@ def candidate_detail(request, sbd):
 def incident_evidence(request, pk):
     incident = get_object_or_404(Incident, pk=pk)
     if not incident.evidence:
-        raise Http404("No evidence available.")
+        raise Http404("Không có bằng chứng đính kèm.")
 
     guessed_type, _ = mimetypes.guess_type(incident.evidence.name)
     file_handle = incident.evidence.open("rb")
@@ -418,13 +441,13 @@ def live_snapshot(request):
 def incident_history(request):
     before_raw = request.GET.get("before")
     if not before_raw:
-        return HttpResponseBadRequest("Missing before parameter.")
+        return HttpResponseBadRequest("Thiếu tham số before.")
     try:
         before_id = int(before_raw)
     except (ValueError, TypeError):
-        return HttpResponseBadRequest("before must be an integer.")
+        return HttpResponseBadRequest("before phải là số nguyên.")
     if not (1 <= before_id <= _MAX_ID_VALUE):
-        return HttpResponseBadRequest("before out of valid range.")
+        return HttpResponseBadRequest("before nằm ngoài phạm vi hợp lệ.")
 
     incidents = fetch_incidents_page(before_id=before_id, limit=INCIDENT_PAGE_SIZE)
     oldest_id = incidents[0].id if incidents else None
@@ -447,7 +470,7 @@ def incident_updates(request):
     try:
         after_id = int(after_raw)
     except (ValueError, TypeError):
-        return HttpResponseBadRequest("after must be an integer.")
+        return HttpResponseBadRequest("after phải là số nguyên.")
     # Clamp: negative values would return everything; values > max are no-ops anyway
     after_id = max(0, min(after_id, _MAX_ID_VALUE))
 
@@ -468,25 +491,25 @@ def incident_updates(request):
 @login_required
 def import_candidates(request):
     if not is_super_admin(request.user):
-        return HttpResponseForbidden("Only Super Admin can import candidate data.")
+        return HttpResponseForbidden("Chỉ Quản trị tổng mới được nhập dữ liệu thí sinh.")
 
     form = CandidateImportForm(request.POST, request.FILES)
     if not form.is_valid():
-        messages.error(request, "Please upload a valid CSV file.")
+        messages.error(request, "Vui lòng tải lên tệp CSV hợp lệ.")
         return redirect("violations:dashboard")
 
     csv_file = form.cleaned_data["csv_file"]
 
     # Enforce upload size limit (5 MB)
     if csv_file.size > _MAX_CSV_SIZE:
-        messages.error(request, "CSV file must be smaller than 5 MB.")
+        messages.error(request, "Tệp CSV phải nhỏ hơn 5 MB.")
         return redirect("violations:dashboard")
 
     raw_content = csv_file.read().decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(raw_content))
 
     if not reader.fieldnames:
-        messages.error(request, "CSV must include header columns.")
+        messages.error(request, "CSV phải có dòng tiêu đề cột.")
         return redirect("violations:dashboard")
 
     header_map = {normalize_header(h): h for h in reader.fieldnames}
@@ -509,10 +532,10 @@ def import_candidates(request):
             continue
 
         defaults = {
-            "full_name": row_value(row, ["hovaten", "fullname", "name"], default="Unknown")[:150],
-            "school": row_value(row, ["truong", "school"], default="Unknown")[:150],
+            "full_name": row_value(row, ["hovaten", "fullname", "name"], default="Chưa rõ")[:150],
+            "school": row_value(row, ["truong", "school"], default="Chưa rõ")[:150],
             "supervisor_teacher": row_value(
-                row, ["gvpt", "giaovienphutrach", "supervisorteacher"], default="Unknown"
+                row, ["gvpt", "giaovienphutrach", "supervisorteacher"], default="Chưa rõ"
             )[:150],
             "exam_room": row_value(row, ["phongthi", "examroom", "room"])[:50],
         }
@@ -525,7 +548,7 @@ def import_candidates(request):
         if was_truncated:
             truncated_count += 1
 
-    summary = f"Candidate import finished. Created: {created_count}, Updated: {updated_count}."
+    summary = f"Đã nhập danh sách thí sinh. Thêm mới: {created_count}, Cập nhật: {updated_count}."
     if truncated_count:
         summary += f" {truncated_count} SBD đã được cắt ngắn cho vừa {MAX_SBD_LENGTH} ký tự."
     messages.success(request, summary)
@@ -576,7 +599,7 @@ def incident_preview(request):
         contexts, XSS strip) are guaranteed consistent with production render.
     """
     if not can_post_message(request.user):
-        return HttpResponseForbidden("Preview is only available for posters.")
+        return HttpResponseForbidden("Chỉ người có quyền gửi sự việc mới được xem trước.")
 
     # Per-user preview rate limit so tight loops cannot burn CPU on
     # markdown + BeautifulSoup rendering. Generous enough for a human
@@ -605,6 +628,7 @@ def incident_preview(request):
 
     preview_incident = Incident(
         reported_sbd=sbd,
+        incident_kind=Incident.normalize_incident_kind(request.POST.get("incident_kind")),
         violation_text=raw_text,
         room_name=get_user_room_name(request.user),
         is_markdown=is_markdown,

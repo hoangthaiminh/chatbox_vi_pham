@@ -4,9 +4,9 @@
     <div class="chat-meta-top d-flex justify-content-between align-items-center gap-2 mb-2">
         <span class="chat-sender fw-semibold">
             {% if mode == "preview" %}
-                You (preview)
+                Bạn (xem trước)
             {% else %}
-                {{ incident.created_by.username|default:"System" }}
+                {{ incident.created_by.username|default:"Hệ thống" }}
             {% endif %}
         </span>
         <span class="small text-muted">
@@ -21,14 +21,19 @@
 
 <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
     <span class="badge text-bg-danger">{{ incident.reported_sbd|upper }}</span>
+    {% if incident.incident_kind == 'reminder' %}
+        <span class="badge text-bg-info">Nhắc nhở</span>
+    {% else %}
+        <span class="badge text-bg-danger-subtle text-danger-emphasis border">Vi phạm</span>
+    {% endif %}
     {% if incident.reported_candidate %}
         <span class="fw-semibold">{{ incident.reported_candidate.full_name }}</span>
         <span class="text-muted small">{{ incident.reported_candidate.school }}</span>
     {% else %}
-        <span class="text-muted small">Candidate profile not found</span>
+        <span class="text-muted small">Không tìm thấy hồ sơ thí sinh</span>
     {% endif %}
     {% if incident.room_name %}
-        <span class="badge text-bg-light border">Room {{ incident.room_name }}</span>
+        <span class="badge text-bg-light border">Phòng {{ incident.room_name }}</span>
     {% endif %}
 </div>
 
@@ -44,7 +49,7 @@
                             style="cursor:pointer;">
                         {{ participant.sbd_snapshot|upper }}
                         {% if participant.relation_type == 'mentioned' %}
-                            <span class="opacity-75">@mentioned</span>
+                            <span class="opacity-75">@được nhắc</span>
                         {% endif %}
                     </button>
                 {% endfor %}
@@ -64,10 +69,10 @@
                    controlsList="nodownload noplaybackrate"
                    disablePictureInPicture
                    oncontextmenu="return false"
-                   title="Click to play in full view">
+                   title="Nhấn để xem toàn màn hình">
                 <source src="{% url 'violations:incident_evidence' incident.pk %}">
             </video>
-            <div class="video-play-overlay" aria-label="Play video">
+            <div class="video-play-overlay" aria-label="Phát video">
                 <i class="bi bi-play-circle-fill"></i>
             </div>
         </div>
@@ -76,7 +81,7 @@
              style="--evidence-ar: {{ incident.evidence_aspect_ratio }}; --evidence-natural-w: {{ incident.evidence_natural_width }};">
             <img src="{% url 'violations:incident_evidence' incident.pk %}"
                  class="incident-legacy-img evidence-guard js-evidence-media evidence-media"
-                 alt="Evidence image"
+                  alt="Ảnh bằng chứng"
                  draggable="false"
                  loading="lazy"
                  data-lg-src="{% url 'violations:incident_evidence' incident.pk %}">
@@ -94,7 +99,7 @@
         <div class="mt-3 d-flex gap-2 flex-wrap">
             {% if editable and incident.id in editable_incident_ids %}
                 <a href="{% url 'violations:edit_incident' incident.pk %}" class="btn btn-outline-dark btn-sm">
-                    <i class="bi bi-pencil-square me-1"></i>Edit
+                    <i class="bi bi-pencil-square me-1"></i>Sửa
                 </a>
             {% endif %}
             {% if can_delete_incidents %}
@@ -106,7 +111,7 @@
                       data-confirm-message="Tin nhắn và file đính kèm sẽ bị xoá vĩnh viễn và không thể khôi phục.">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-outline-danger btn-sm">
-                        <i class="bi bi-trash me-1"></i>Delete
+                        <i class="bi bi-trash me-1"></i>Xoá
                     </button>
                 </form>
             {% endif %}

@@ -1,10 +1,10 @@
 {% load static %}
 <!doctype html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Exam Fraud Monitor</title>
+    <title>Giám sát Gian lận Thi cử</title>
     <link href="{% static 'vendor/be-vietnam-pro/be-vietnam-pro.css' %}" rel="stylesheet">
     <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
     <link href="{% static 'vendor/bootstrap-icons/css/bootstrap-icons.min.css' %}" rel="stylesheet">
@@ -20,12 +20,12 @@
     <nav class="navbar navbar-expand-lg border-bottom border-light-subtle sticky-top shadow-sm frosted-navbar">
         <div class="container-fluid px-3 px-md-4">
             <a class="navbar-brand fw-bold" href="{% url 'violations:dashboard' %}">
-                <i class="bi bi-shield-exclamation me-2"></i>Fraud Monitor
+                <i class="bi bi-shield-exclamation me-2"></i>Giám sát Gian lận
             </a>
             <button class="navbar-toggler app-navbar-toggler" type="button"
                     data-bs-toggle="collapse" data-bs-target="#appPrimaryNav"
                     aria-controls="appPrimaryNav" aria-expanded="false"
-                    aria-label="Toggle navigation">
+                    aria-label="Mở/đóng điều hướng">
                 <span class="navbar-toggler-icon-wrap">
                     <i class="bi bi-list"></i>
                 </span>
@@ -34,25 +34,25 @@
                 {% with current_page=request.resolver_match.url_name %}
                     <div class="d-flex flex-wrap align-items-center gap-2 ms-lg-3 me-lg-auto page-switch-nav">
                         <a href="{% url 'violations:dashboard' %}" class="btn btn-sm {% if current_page == 'dashboard' %}btn-dark{% else %}btn-outline-dark{% endif %}">
-                            Chat Box
+                            Hộp thoại
                         </a>
                         <a href="{% url 'violations:statistics' %}" class="btn btn-sm {% if current_page == 'statistics' %}btn-dark{% else %}btn-outline-dark{% endif %}">
-                            Statistics
+                            Thống kê
                         </a>
                     </div>
                 {% endwith %}
                 <div class="d-flex flex-wrap align-items-center gap-2 ms-lg-auto app-user-area">
-                    <span class="badge rounded-pill text-bg-light border">{{ role_label|default:'Guest Viewer' }}</span>
+                    <span class="badge rounded-pill text-bg-light border">{{ role_label|default:'Khách' }}</span>
                     {% if user.is_authenticated %}
                         <span class="badge rounded-pill text-bg-dark">
                             <i class="bi bi-person-circle me-1"></i>{{ user.username }}
                         </span>
                         <form method="post" action="{% url 'violations:logout' %}" class="d-inline">
                             {% csrf_token %}
-                            <button type="submit" class="btn btn-outline-secondary btn-sm">Logout</button>
+                            <button type="submit" class="btn btn-outline-secondary btn-sm">Đăng xuất</button>
                         </form>
                     {% else %}
-                        <a href="{% url 'violations:login' %}" class="btn btn-outline-dark btn-sm">Admin Login</a>
+                        <a href="{% url 'violations:login' %}" class="btn btn-outline-dark btn-sm">Đăng nhập Admin</a>
                     {% endif %}
                 </div>
             </div>
@@ -67,9 +67,9 @@
                     role="alert" aria-live="assertive" aria-atomic="true"
                     data-bs-autohide="true" data-bs-delay="3500">
                     <div class="toast-header">
-                        <strong class="me-auto">Notification</strong>
-                        <small class="text-muted">just now</small>
-                        <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+                        <strong class="me-auto">Thông báo</strong>
+                        <small class="text-muted">vừa xong</small>
+                        <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Đóng"></button>
                     </div>
                     <div class="toast-body">{{ message }}</div>
                 </div>

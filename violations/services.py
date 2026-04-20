@@ -5,7 +5,7 @@ from django.contrib.auth.models import Group
 from django.db import transaction
 from django.db.models.functions import Upper
 
-from .models import Candidate, IncidentParticipant, RoomAdminProfile
+from .models import Candidate, Incident, IncidentParticipant, RoomAdminProfile
 
 MAX_SBD_LENGTH = 9
 MAX_VIOLATION_TEXT_LEN = 2000
@@ -20,9 +20,9 @@ ROLE_SUPER_ADMIN = "super_admin"
 ROLE_ROOM_ADMIN = "room_admin"
 ROLE_VIEWER = "viewer"
 ROLE_CHOICES = (
-    (ROLE_SUPER_ADMIN, "Super Admin"),
-    (ROLE_ROOM_ADMIN, "Room Admin"),
-    (ROLE_VIEWER, "Viewer"),
+    (ROLE_SUPER_ADMIN, "Quản trị tổng"),
+    (ROLE_ROOM_ADMIN, "Quản trị phòng"),
+    (ROLE_VIEWER, "Người xem"),
 )
 ROLE_LABELS = dict(ROLE_CHOICES)
 
@@ -86,7 +86,7 @@ def role_requires_room(role):
 def ensure_valid_role_room(role, room_name):
     normalized_room_name = normalize_room_name(room_name)
     if role_requires_room(role) and not normalized_room_name:
-        raise ValueError(f"Room name is required for {ROLE_LABELS[ROLE_ROOM_ADMIN]}.")
+        raise ValueError(f"Vai trò {ROLE_LABELS[ROLE_ROOM_ADMIN]} bắt buộc phải có tên phòng.")
     return normalized_room_name
 
 
@@ -94,8 +94,8 @@ def format_role_assignment_success(username, role, room_name=""):
     normalized_room_name = normalize_room_name(room_name)
     role_label = ROLE_LABELS.get(role, role)
     if role == ROLE_ROOM_ADMIN and normalized_room_name:
-        return f"{username} set as {role_label} for room '{normalized_room_name}'."
-    return f"{username} set as {role_label}."
+        return f"Đã gán {username} thành {role_label} cho phòng '{normalized_room_name}'."
+    return f"Đã gán {username} thành {role_label}."
 
 
 def detect_user_role(user):
@@ -131,7 +131,12 @@ def apply_user_role(user, role, room_name=""):
 
 
 @transaction.atomic
-def sync_incident_references(incident, primary_sbd, violation_text):
+def sync_incident_references(
+    incident,
+    primary_sbd,
+    violation_text,
+    incident_kind=Incident.KIND_VIOLATION,
+):
     """Save incident + participants using quick_fixes-compatible parsing rules."""
     primary_sbd, primary_truncated = apply_default_prefix(primary_sbd)
 
@@ -155,6 +160,7 @@ def sync_incident_references(incident, primary_sbd, violation_text):
 
     incident.reported_sbd = primary_sbd
     incident.reported_candidate = candidates.get(primary_sbd)
+    incident.incident_kind = Incident.normalize_incident_kind(incident_kind)
     incident.violation_text = text
     incident.save()
 
