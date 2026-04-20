@@ -23,7 +23,15 @@
                         <div class="invalid-feedback" id="sbd-error"></div>
                     </div>
 
-                    <div class="col-md-9">
+                    <div class="col-md-3">
+                        <label for="id_incident_kind" class="form-label">Phân loại</label>
+                        <select name="incident_kind" id="id_incident_kind" class="form-select">
+                            <option value="violation" {% if form.incident_kind.value == 'violation' or not form.incident_kind.value %}selected{% endif %}>Vi phạm</option>
+                            <option value="reminder" {% if form.incident_kind.value == 'reminder' %}selected{% endif %}>Nhắc nhở</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-6">
                         <label class="form-label">Nội dung Vi phạm</label>
                         <div class="md-editor-wrap mention-textarea-wrap" id="md-editor-main">
 

@@ -24,7 +24,7 @@ class RoleAwareUserCreationForm(AdminUserCreationForm):
     room_name = forms.CharField(
         max_length=50,
         required=False,
-        help_text="Required when role is Room Admin.",
+        help_text="Bắt buộc khi vai trò là Quản trị phòng.",
     )
 
     class Meta(AdminUserCreationForm.Meta):
@@ -46,7 +46,7 @@ class RoleAwareUserChangeForm(UserChangeForm):
     room_name = forms.CharField(
         max_length=50,
         required=False,
-        help_text="Required when role is Room Admin.",
+        help_text="Bắt buộc khi vai trò là Quản trị phòng.",
     )
 
     class Meta(UserChangeForm.Meta):
@@ -84,7 +84,7 @@ class RoleAwareUserAdmin(UserAdmin):
     add_form = RoleAwareUserCreationForm
 
     fieldsets = UserAdmin.fieldsets + (
-        ("Application Role", {"fields": ("role", "room_name")}),
+        ("Vai trò ứng dụng", {"fields": ("role", "room_name")}),
     )
     add_fieldsets = (
         (
@@ -94,15 +94,15 @@ class RoleAwareUserAdmin(UserAdmin):
                 "fields": ("username", "email", "first_name", "last_name", "password1", "password2"),
             },
         ),
-        ("Application Role", {"fields": ("role", "room_name")}),
+        ("Vai trò ứng dụng", {"fields": ("role", "room_name")}),
     )
     list_display = UserAdmin.list_display + ("app_role", "app_room")
 
-    @admin.display(description="App Role")
+    @admin.display(description="Vai trò")
     def app_role(self, obj):
         return ROLE_LABELS.get(detect_user_role(obj), ROLE_VIEWER)
 
-    @admin.display(description="Room")
+    @admin.display(description="Phòng")
     def app_room(self, obj):
         profile = getattr(obj, "room_admin_profile", None)
         return profile.room_name if profile else "-"
@@ -136,8 +136,15 @@ class RoomAdminProfileAdmin(admin.ModelAdmin):
 
 @admin.register(Incident)
 class IncidentAdmin(admin.ModelAdmin):
-    list_display = ("reported_sbd", "room_name", "created_by", "created_at", "updated_at")
-    list_filter = ("room_name", "created_at")
+    list_display = (
+        "reported_sbd",
+        "incident_kind",
+        "room_name",
+        "created_by",
+        "created_at",
+        "updated_at",
+    )
+    list_filter = ("incident_kind", "room_name", "created_at")
     search_fields = ("reported_sbd", "violation_text", "created_by__username")
     inlines = [IncidentParticipantInline]
 

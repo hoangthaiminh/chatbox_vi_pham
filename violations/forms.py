@@ -2,6 +2,7 @@ from pathlib import Path
 
 from django import forms
 
+from .models import Incident
 from .services import MAX_SBD_LENGTH, MAX_VIOLATION_TEXT_LEN, is_valid_sbd_syntax
 
 ALLOWED_IMAGE_EXTENSIONS = {
@@ -16,13 +17,19 @@ MAX_VIDEO_SIZE = 40 * 1024 * 1024   # 40 MB
 
 class IncidentBaseForm(forms.Form):
     sbd = forms.CharField(max_length=MAX_SBD_LENGTH, label="SBD", strip=True)
+    incident_kind = forms.ChoiceField(
+        label="Phân loại",
+        choices=Incident.INCIDENT_KIND_CHOICES,
+        required=False,
+        initial=Incident.KIND_VIOLATION,
+    )
     violation_text = forms.CharField(
-        label="Violation Content",
+        label="Nội dung vi phạm",
         widget=forms.Textarea(attrs={"rows": 5}),
         max_length=MAX_VIOLATION_TEXT_LEN,
         strip=True,
     )
-    evidence = forms.FileField(label="Evidence (Image or Video)", required=False)
+    evidence = forms.FileField(label="Bằng chứng (Ảnh hoặc Video)", required=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -35,7 +42,7 @@ class IncidentBaseForm(forms.Form):
     def clean_sbd(self):
         value = self.cleaned_data["sbd"].strip()
         if not value:
-            raise forms.ValidationError("SBD cannot be empty.")
+            raise forms.ValidationError("SBD không được để trống.")
         if not is_valid_sbd_syntax(value):
             raise forms.ValidationError(
                 "SBD phải từ 2 đến 9 ký tự, chỉ gồm chữ cái (a-z, A-Z) và/hoặc chữ số (0-9). "
@@ -47,9 +54,13 @@ class IncidentBaseForm(forms.Form):
         value = self.cleaned_data["violation_text"].strip()
         if len(value) > MAX_VIOLATION_TEXT_LEN:
             raise forms.ValidationError(
-                f"Violation text must be at most {MAX_VIOLATION_TEXT_LEN} characters."
+                f"Nội dung vi phạm tối đa {MAX_VIOLATION_TEXT_LEN} ký tự."
             )
         return value
+
+    def clean_incident_kind(self):
+        value = self.cleaned_data.get("incident_kind")
+        return Incident.normalize_incident_kind(value)
 
     def clean_evidence(self):
         evidence = self.cleaned_data.get("evidence")
@@ -78,8 +89,8 @@ class IncidentCreateForm(IncidentBaseForm):
 
 
 class IncidentEditForm(IncidentBaseForm):
-    remove_evidence = forms.BooleanField(required=False, label="Remove existing evidence")
+    remove_evidence = forms.BooleanField(required=False, label="Xoá bằng chứng hiện có")
 
 
 class CandidateImportForm(forms.Form):
-    csv_file = forms.FileField(label="CSV file")
+    csv_file = forms.FileField(label="Tệp CSV")

@@ -52,6 +52,13 @@
             <div class="invalid-feedback" id="sbd-error"></div>
         </div>
 
+        <div class="compose-kind">
+            <select name="incident_kind" id="id_incident_kind" class="form-select" title="Phân loại lỗi">
+                <option value="violation" selected>Vi phạm</option>
+                <option value="reminder">Nhắc nhở</option>
+            </select>
+        </div>
+
         <div class="compose-text-wrap mention-textarea-wrap">
             <input type="text" name="violation_text" id="id_violation_text_simple"
                    class="form-control compose-simple-input"

@@ -93,7 +93,7 @@
         const dialog = document.getElementById("appConfirmDialog");
         if (!dialog) {
             // Fallback to native confirm if the dialog is missing.
-            return Promise.resolve(window.confirm(options?.message || "Confirm?"));
+            return Promise.resolve(window.confirm(options?.message || "Xác nhận?"));
         }
         const titleEl = dialog.querySelector(".app-confirm-title");
         const messageEl = dialog.querySelector(".app-confirm-message");
@@ -151,7 +151,7 @@
         el.innerHTML = `
             <div class="d-flex">
               <div class="toast-body">${escHtml(message)}</div>
-              <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Đóng"></button>
             </div>`;
         container.appendChild(el);
         new bootstrap.Toast(el, { delay: 2800 }).show();
@@ -227,7 +227,7 @@
                     attributes: { preload: "metadata", controls: true },
                 },
                 thumb: "",
-                subHtml: "<p>Video Evidence</p>",
+                subHtml: "<p>Video bằng chứng</p>",
             });
         });
 
@@ -371,7 +371,7 @@
 
         const empty = document.createElement("div");
         empty.className = "empty-state text-center py-5";
-        empty.innerHTML = '<i class="bi bi-inbox display-6"></i><p class="mb-0 mt-2">No incidents posted yet.</p>';
+        empty.innerHTML = '<i class="bi bi-inbox display-6"></i><p class="mb-0 mt-2">Chưa có sự việc nào được ghi nhận.</p>';
         incidentListContainer.appendChild(empty);
     }
 
@@ -437,14 +437,14 @@
         if (!historyUrl) return;
 
         loadingOlder = true;
-        updateTopStatus("Loading older messages...");
+        updateTopStatus("Đang tải các tin nhắn cũ hơn...");
 
         try {
             const response = await fetch(`${historyUrl}?before=${encodeURIComponent(oldestId)}`, {
                 headers: { "X-Requested-With": "XMLHttpRequest" },
             });
             if (!response.ok) {
-                updateTopStatus("Failed to load older messages.");
+                updateTopStatus("Không thể tải tin nhắn cũ hơn.");
                 return;
             }
 
@@ -453,9 +453,9 @@
             if (payload.oldest_id) oldestId = payload.oldest_id;
             if (newestId === null && payload.newest_id) newestId = payload.newest_id;
             hasOlder = Boolean(payload.has_older);
-            updateTopStatus(!hasOlder ? "You reached the first message." : "");
+            updateTopStatus(!hasOlder ? "Bạn đã đến tin nhắn đầu tiên." : "");
         } catch (_) {
-            updateTopStatus("Failed to load older messages.");
+            updateTopStatus("Không thể tải tin nhắn cũ hơn.");
         } finally {
             loadingOlder = false;
         }
@@ -511,7 +511,7 @@
             const payload = contentType.includes("application/json") ? await response.json() : null;
 
             if (!response.ok || (payload && payload.ok === false)) {
-                const errorText = payload && payload.error ? payload.error : "Could not send message.";
+                const errorText = payload && payload.error ? payload.error : "Không thể gửi tin nhắn.";
                 showToast(errorText, "danger");
                 return;
             }
@@ -535,7 +535,7 @@
             }
             updateTopStatus("");
         } catch (_) {
-            showToast("Could not send message.", "danger");
+            showToast("Không thể gửi tin nhắn.", "danger");
         } finally {
             sendingComposer = false;
             setComposerSubmittingState(false);
@@ -556,7 +556,7 @@
 
             const payload = await response.json().catch(() => ({}));
             if (!response.ok || !payload.ok) {
-                showToast(payload.error || "Delete failed.", "danger");
+                showToast(payload.error || "Xoá không thành công.", "danger");
                 return;
             }
 
@@ -575,7 +575,7 @@
             updateTopStatus("");
             await loadNewMessages(false);
         } catch (_) {
-            showToast("Delete failed.", "danger");
+            showToast("Xoá không thành công.", "danger");
         }
     }
 
@@ -594,13 +594,13 @@
         if (!socketUrl) return;
         if (liveSocket && (liveSocket.readyState === WebSocket.OPEN || liveSocket.readyState === WebSocket.CONNECTING)) return;
 
-        updateConnectionStatus("Connecting websocket...");
+        updateConnectionStatus("Đang kết nối thời gian thực...");
 
         try {
             liveSocket = new WebSocket(socketUrl);
         } catch (error) {
             console.debug("Websocket init failed:", error);
-            updateConnectionStatus("Realtime unavailable");
+            updateConnectionStatus("Kết nối thời gian thực tạm thời không khả dụng");
             return;
         }
 
@@ -619,12 +619,12 @@
         });
 
         liveSocket.addEventListener("error", () => {
-            updateConnectionStatus("Realtime reconnecting...");
+            updateConnectionStatus("Đang kết nối lại thời gian thực...");
         });
 
         liveSocket.addEventListener("close", () => {
             liveSocket = null;
-            updateConnectionStatus("Realtime disconnected. Reconnecting...");
+            updateConnectionStatus("Mất kết nối thời gian thực. Đang kết nối lại...");
             window.setTimeout(connectLiveSocket, reconnectDelayMs);
             reconnectDelayMs = Math.min(reconnectDelayMs * 2, 30000);
         });
@@ -633,7 +633,7 @@
     async function openCandidateDetail(sbd) {
         if (!detailContent || !detailCanvas) return;
 
-        detailContent.innerHTML = '<div class="text-center py-4 text-muted">Loading...</div>';
+        detailContent.innerHTML = '<div class="text-center py-4 text-muted">Đang tải...</div>';
         detailCanvas.show();
 
         try {
@@ -641,7 +641,7 @@
                 headers: { "X-Requested-With": "XMLHttpRequest" },
             });
             if (!response.ok) {
-                detailContent.innerHTML = '<div class="alert alert-danger">Could not load candidate details.</div>';
+                detailContent.innerHTML = '<div class="alert alert-danger">Không thể tải chi tiết thí sinh.</div>';
                 return;
             }
             detailContent.innerHTML = await response.text();
@@ -650,7 +650,7 @@
             bindLightGallery(detailContent);
             formatLocalTimestamps(detailContent);
         } catch (_) {
-            detailContent.innerHTML = '<div class="alert alert-danger">Could not load candidate details.</div>';
+            detailContent.innerHTML = '<div class="alert alert-danger">Không thể tải chi tiết thí sinh.</div>';
         }
     }
 
@@ -733,9 +733,11 @@
         content.innerHTML = "<div class='md-preview-skeleton'><div class='skel-line'></div><div class='skel-line'></div><div class='skel-line'></div></div>";
 
         const sbdInput = document.getElementById("id_sbd");
+        const kindInput = document.getElementById("id_incident_kind");
         const form = new FormData();
         form.append("violation_text", ta.value);
         form.append("sbd", sbdInput ? sbdInput.value : "");
+        form.append("incident_kind", kindInput ? kindInput.value : "violation");
         form.append("is_markdown", "1");
 
         try {
@@ -754,7 +756,7 @@
             bindEvidenceGuards(content);
             bindLightGallery(content);
         } catch (_) {
-            content.innerHTML = '<div class="text-muted small">Preview unavailable.</div>';
+            content.innerHTML = '<div class="text-muted small">Không thể xem trước lúc này.</div>';
         }
     }
 
@@ -762,8 +764,8 @@
         const selStart = ta.selectionStart;
         const selEnd = ta.selectionEnd;
         const selected = ta.value.slice(selStart, selEnd);
-        const alt = (selected && selected.trim()) || "image";
-        const placeholder = `![Uploading ${alt}...]()`;
+        const alt = (selected && selected.trim()) || "ảnh";
+        const placeholder = `![Đang tải ${alt}...]()`;
 
         insertTextAt(ta, placeholder, selStart, selEnd);
 
@@ -782,7 +784,7 @@
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok || !data.url) {
-                showToast(data.error || "Image upload failed.", "danger");
+                showToast(data.error || "Tải ảnh lên thất bại.", "danger");
                 return;
             }
 
@@ -792,23 +794,23 @@
                 insertTextAt(ta, replacement, idx, idx + placeholder.length);
             }
         } catch (_) {
-            showToast("Image upload failed.", "danger");
+            showToast("Tải ảnh lên thất bại.", "danger");
         }
     }
 
     // Shared markdown-editor actions. Used by both the dashboard composer
     // and the standalone edit-incident page.
     const MD_ACTIONS = {
-        bold: (ta) => insertMarkdown(ta, { before: "**", placeholder: "bold text" }),
-        italic: (ta) => insertMarkdown(ta, { before: "*", placeholder: "italic text" }),
-        strike: (ta) => insertMarkdown(ta, { before: "~~", placeholder: "strikethrough" }),
-        code: (ta) => insertMarkdown(ta, { before: "`", placeholder: "code" }),
-        codeblock: (ta) => insertMarkdown(ta, { before: "```\n", after: "\n```", placeholder: "code block", block: true }),
-        quote: (ta) => insertMarkdown(ta, { linePrefix: "> ", placeholder: "quote", block: true }),
-        ul: (ta) => insertMarkdown(ta, { linePrefix: "- ", placeholder: "item", block: true }),
-        ol: (ta) => insertMarkdown(ta, { linePrefix: "1. ", placeholder: "item", block: true }),
-        link: (ta) => insertMarkdown(ta, { before: "[", after: "](url)", placeholder: "link text" }),
-        image: (ta) => insertMarkdown(ta, { before: "![", after: "](url)", placeholder: "alt text" }),
+        bold: (ta) => insertMarkdown(ta, { before: "**", placeholder: "chữ đậm" }),
+        italic: (ta) => insertMarkdown(ta, { before: "*", placeholder: "chữ nghiêng" }),
+        strike: (ta) => insertMarkdown(ta, { before: "~~", placeholder: "gạch ngang" }),
+        code: (ta) => insertMarkdown(ta, { before: "`", placeholder: "mã lệnh" }),
+        codeblock: (ta) => insertMarkdown(ta, { before: "```\n", after: "\n```", placeholder: "khối mã", block: true }),
+        quote: (ta) => insertMarkdown(ta, { linePrefix: "> ", placeholder: "trích dẫn", block: true }),
+        ul: (ta) => insertMarkdown(ta, { linePrefix: "- ", placeholder: "mục", block: true }),
+        ol: (ta) => insertMarkdown(ta, { linePrefix: "1. ", placeholder: "mục", block: true }),
+        link: (ta) => insertMarkdown(ta, { before: "[", after: "](url)", placeholder: "văn bản liên kết" }),
+        image: (ta) => insertMarkdown(ta, { before: "![", after: "](url)", placeholder: "mô tả ảnh" }),
         mention: (ta) => insertMarkdown(ta, {
             placeholder: "TS0000",
             selectOffset: 2,
@@ -932,7 +934,7 @@
                 return;
             }
 
-            const kind = file.type && file.type.startsWith("image/") ? "Image" : "File";
+            const kind = file.type && file.type.startsWith("image/") ? "Ảnh" : "Tệp";
             const sizeText = formatFileSize(file.size);
             const info = sizeText ? `${kind}: ${file.name} (${sizeText})` : `${kind}: ${file.name}`;
             evidenceLabel.classList.add("has-file");
