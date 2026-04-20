@@ -13,7 +13,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_GET, require_POST
 
-from .forms import CandidateImportForm, IncidentCreateForm, IncidentEditForm
+from .forms import (
+    ALLOWED_VIDEO_EXTENSIONS,
+    CandidateImportForm,
+    IncidentCreateForm,
+    IncidentEditForm,
+)
 from .models import Candidate, Incident
 from .realtime import (
     INCIDENT_PAGE_SIZE,
@@ -186,6 +191,13 @@ def create_incident(request):
     )
     evidence = form.cleaned_data.get("evidence")
     if evidence:
+        if _evidence_is_video(evidence):
+            rate_error = _enforce_video_rate_limit(request.user.id)
+            if rate_error:
+                if is_ajax_request(request):
+                    return JsonResponse({"ok": False, "error": rate_error}, status=429)
+                messages.error(request, rate_error)
+                return redirect("violations:dashboard")
         incident.evidence = evidence
 
     sync_info = sync_incident_references(
@@ -211,6 +223,25 @@ def create_incident(request):
 
     messages.success(request, "Incident posted successfully.")
     return redirect("violations:dashboard")
+
+
+def _evidence_is_video(uploaded_file):
+    """Return True if the uploaded file's extension is a video format."""
+    from pathlib import Path
+    if not uploaded_file or not getattr(uploaded_file, "name", ""):
+        return False
+    return Path(uploaded_file.name).suffix.lower() in ALLOWED_VIDEO_EXTENSIONS
+
+
+def _enforce_video_rate_limit(user_id):
+    """Wrap the sliding-window limiter so callers get a user-facing string
+    on throttle and None when the upload is allowed."""
+    from .image_uploads import VideoUploadRateLimitError, enforce_video_rate_limit
+    try:
+        enforce_video_rate_limit(user_id)
+    except VideoUploadRateLimitError as exc:
+        return str(exc)
+    return None
 
 
 def _surface_truncation_warnings(request, sync_info):
@@ -255,6 +286,11 @@ def edit_incident(request, pk):
 
             evidence = form.cleaned_data.get("evidence")
             if evidence:
+                if _evidence_is_video(evidence):
+                    rate_error = _enforce_video_rate_limit(request.user.id)
+                    if rate_error:
+                        messages.error(request, rate_error)
+                        return redirect("violations:edit_incident", pk=pk)
                 if incident.evidence:
                     incident.evidence.delete(save=False)
                 incident.evidence = evidence

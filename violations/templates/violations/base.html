@@ -83,6 +83,25 @@
 
     {% block bottom_bar %}{% endblock %}
 
+    <div class="app-confirm-dialog" id="appConfirmDialog" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="appConfirmDialogTitle">
+        <div class="app-confirm-backdrop" data-confirm-close="1"></div>
+        <div class="app-confirm-panel" role="document">
+            <div class="app-confirm-icon">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+            </div>
+            <h5 class="app-confirm-title" id="appConfirmDialogTitle">Xác nhận</h5>
+            <p class="app-confirm-message" id="appConfirmDialogMessage">Bạn có chắc chắn muốn thực hiện hành động này?</p>
+            <div class="app-confirm-actions">
+                <button type="button" class="btn btn-outline-secondary app-confirm-cancel" data-confirm-close="1">
+                    Huỷ
+                </button>
+                <button type="button" class="btn btn-danger app-confirm-ok">
+                    <i class="bi bi-trash me-1"></i>Xoá
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
 
     <script src="{% static 'vendor/lightgallery/js/lightgallery.umd.min.js' %}"></script>
