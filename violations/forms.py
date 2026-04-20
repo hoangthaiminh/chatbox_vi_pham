@@ -11,7 +11,7 @@ ALLOWED_VIDEO_EXTENSIONS = {
     ".mp4", ".mov", ".webm", ".mkv", ".avi",
 }
 MAX_IMAGE_SIZE = 20 * 1024 * 1024   # 20 MB
-MAX_VIDEO_SIZE = 200 * 1024 * 1024  # 200 MB
+MAX_VIDEO_SIZE = 40 * 1024 * 1024   # 40 MB
 
 
 class IncidentBaseForm(forms.Form):
@@ -63,7 +63,9 @@ class IncidentBaseForm(forms.Form):
 
         if extension in ALLOWED_VIDEO_EXTENSIONS:
             if evidence.size > MAX_VIDEO_SIZE:
-                raise forms.ValidationError("Video file phải ≤ 200 MB.")
+                raise forms.ValidationError(
+                    f"Video quá lớn: tối đa {MAX_VIDEO_SIZE // (1024 * 1024)} MB."
+                )
             return evidence
 
         raise forms.ValidationError(

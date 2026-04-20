@@ -53,6 +53,14 @@ RATE_LIMIT_WINDOW_SECONDS = 60 * 60  # 1 hour
 PREVIEW_RATE_LIMIT_MAX_PER_WINDOW = 120
 PREVIEW_RATE_LIMIT_WINDOW_SECONDS = 60  # 1 minute
 
+# Video attachment rate limit — tuned for ~230 concurrent users on a small
+# PythonAnywhere plan. Each 40 MB video is heavy on bandwidth and disk, so
+# we keep the per-user budget modest. A short per-user cooldown also stops
+# accidental double-submits.
+VIDEO_RATE_LIMIT_MAX_PER_WINDOW = 15
+VIDEO_RATE_LIMIT_WINDOW_SECONDS = 60 * 60  # 1 hour
+VIDEO_MIN_INTERVAL_SECONDS = 5  # minimum gap between two video uploads
+
 # Housekeeping: every N limit checks we drop entries for users who haven't
 # uploaded anything within the last window. Keeps _rate_state bounded
 # regardless of how many distinct users touch the endpoint.
@@ -65,6 +73,9 @@ _preview_state: dict[int, deque] = {}
 _preview_lock = Lock()
 _preview_check_count = 0
 
+_video_state: dict[int, deque] = {}
+_video_lock = Lock()
+
 
 class ImageUploadError(Exception):
     """User-facing error while handling an uploaded image."""
@@ -72,6 +83,10 @@ class ImageUploadError(Exception):
 
 class PreviewRateLimitError(Exception):
     """User-facing error when preview is called too often."""
+
+
+class VideoUploadRateLimitError(Exception):
+    """User-facing error when a user uploads videos too frequently."""
 
 
 def _enforce_generic_limit(state, lock, counter_ref, max_per_window,
@@ -119,6 +134,36 @@ def enforce_preview_rate_limit(user_id: int) -> None:
         user_id, PreviewRateLimitError,
         "Bạn đang preview quá nhiều lần. Vui lòng chờ giây lát.",
     )
+
+
+def enforce_video_rate_limit(user_id: int) -> None:
+    """Per-user rate limit for video attachments.
+
+    Two complementary rules:
+      • a sliding window of VIDEO_RATE_LIMIT_MAX_PER_WINDOW uploads per
+        VIDEO_RATE_LIMIT_WINDOW_SECONDS (absolute ceiling), and
+      • a small VIDEO_MIN_INTERVAL_SECONDS floor so that accidental double
+        clicks / double submissions can't both go through.
+    """
+    now = time.monotonic()
+    cutoff = now - VIDEO_RATE_LIMIT_WINDOW_SECONDS
+    with _video_lock:
+        q = _video_state.setdefault(user_id, deque())
+        while q and q[0] < cutoff:
+            q.popleft()
+
+        if q and (now - q[-1]) < VIDEO_MIN_INTERVAL_SECONDS:
+            wait = int(VIDEO_MIN_INTERVAL_SECONDS - (now - q[-1])) + 1
+            raise VideoUploadRateLimitError(
+                f"Vui lòng chờ {wait}s trước khi upload video kế tiếp."
+            )
+
+        if len(q) >= VIDEO_RATE_LIMIT_MAX_PER_WINDOW:
+            raise VideoUploadRateLimitError(
+                f"Bạn đã upload quá {VIDEO_RATE_LIMIT_MAX_PER_WINDOW} video "
+                "trong 1 giờ qua. Vui lòng thử lại sau."
+            )
+        q.append(now)
 
 
 def _validate_and_normalise(file_obj) -> tuple[bytes, str]:

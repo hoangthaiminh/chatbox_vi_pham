@@ -11,7 +11,10 @@
         </span>
         <span class="small text-muted">
             <i class="bi bi-clock me-1"></i>
-            {% if incident.created_at %}{{ incident.created_at|date:"Y-m-d H:i" }}{% else %}—{% endif %}
+            {% if incident.created_at %}
+                <time class="js-local-time"
+                      datetime="{{ incident.created_at|date:'c' }}">{{ incident.created_at|date:"Y-m-d H:i" }}</time>
+            {% else %}—{% endif %}
         </span>
     </div>
 {% endif %}
@@ -97,9 +100,10 @@
             {% if can_delete_incidents %}
                 <form method="post"
                       action="{% url 'violations:delete_incident' incident.pk %}"
-                      onsubmit="return confirm('Delete this message?');"
                       class="d-inline js-delete-incident-form"
-                      data-incident-id="{{ incident.id }}">
+                      data-incident-id="{{ incident.id }}"
+                      data-confirm-title="Xoá tin nhắn này?"
+                      data-confirm-message="Tin nhắn và file đính kèm sẽ bị xoá vĩnh viễn và không thể khôi phục.">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-outline-danger btn-sm">
                         <i class="bi bi-trash me-1"></i>Delete

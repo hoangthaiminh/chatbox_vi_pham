@@ -68,6 +68,76 @@
             .replace(/\"/g, "&quot;");
     }
 
+    function formatLocalTimestamps(scope) {
+        const root = scope || document;
+        const pad = (n) => String(n).padStart(2, "0");
+        root.querySelectorAll("time.js-local-time").forEach((el) => {
+            if (el.dataset.localized === "1") return;
+            const iso = el.getAttribute("datetime");
+            if (!iso) return;
+            const d = new Date(iso);
+            if (Number.isNaN(d.getTime())) return;
+            const text = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+            el.textContent = text;
+            try {
+                const tzName = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                el.title = tzName ? `${text} (${tzName})` : text;
+            } catch (_) {
+                el.title = text;
+            }
+            el.dataset.localized = "1";
+        });
+    }
+
+    function showConfirmDialog(options) {
+        const dialog = document.getElementById("appConfirmDialog");
+        if (!dialog) {
+            // Fallback to native confirm if the dialog is missing.
+            return Promise.resolve(window.confirm(options?.message || "Confirm?"));
+        }
+        const titleEl = dialog.querySelector(".app-confirm-title");
+        const messageEl = dialog.querySelector(".app-confirm-message");
+        const okBtn = dialog.querySelector(".app-confirm-ok");
+        const cancelBtn = dialog.querySelector(".app-confirm-cancel");
+
+        if (titleEl) titleEl.textContent = options?.title || "Xác nhận";
+        if (messageEl) messageEl.textContent = options?.message || "Bạn có chắc chắn muốn thực hiện?";
+        if (okBtn) {
+            okBtn.innerHTML = `<i class="bi bi-trash me-1"></i>${options?.okText || "Xoá"}`;
+            okBtn.classList.remove("btn-danger", "btn-dark");
+            okBtn.classList.add(options?.variant === "dark" ? "btn-dark" : "btn-danger");
+        }
+        if (cancelBtn) cancelBtn.textContent = options?.cancelText || "Huỷ";
+
+        return new Promise((resolve) => {
+            const cleanup = (result) => {
+                dialog.removeEventListener("click", onDialogClick);
+                document.removeEventListener("keydown", onKeyDown);
+                okBtn?.removeEventListener("click", onOk);
+                dialog.setAttribute("hidden", "");
+                dialog.setAttribute("aria-hidden", "true");
+                dialog.classList.remove("is-open");
+                resolve(result);
+            };
+            const onOk = () => cleanup(true);
+            const onDialogClick = (event) => {
+                if (event.target.closest("[data-confirm-close]")) cleanup(false);
+            };
+            const onKeyDown = (event) => {
+                if (event.key === "Escape") cleanup(false);
+                else if (event.key === "Enter") { event.preventDefault(); cleanup(true); }
+            };
+            okBtn?.addEventListener("click", onOk);
+            dialog.addEventListener("click", onDialogClick);
+            document.addEventListener("keydown", onKeyDown);
+
+            dialog.removeAttribute("hidden");
+            dialog.setAttribute("aria-hidden", "false");
+            dialog.classList.add("is-open");
+            requestAnimationFrame(() => okBtn?.focus());
+        });
+    }
+
     function showToast(message, variant) {
         const container = document.querySelector(".toast-container");
         if (!container || typeof bootstrap === "undefined") {
@@ -331,6 +401,7 @@
         bindEvidenceGuards(incidentListContainer);
         nodes.forEach((node) => bindEvidencePlaceholders(node));
         nodes.forEach((node) => bindLightGallery(node));
+        nodes.forEach((node) => formatLocalTimestamps(node));
 
         const heightDelta = document.documentElement.scrollHeight - previousHeight;
         window.scrollTo(0, previousTop + heightDelta);
@@ -348,6 +419,7 @@
         bindEvidenceGuards(incidentListContainer);
         nodes.forEach((node) => bindEvidencePlaceholders(node));
         nodes.forEach((node) => bindLightGallery(node));
+        nodes.forEach((node) => formatLocalTimestamps(node));
         recomputeIncidentBounds();
         return nodes.length;
     }
@@ -440,7 +512,7 @@
 
             if (!response.ok || (payload && payload.ok === false)) {
                 const errorText = payload && payload.error ? payload.error : "Could not send message.";
-                updateTopStatus(errorText);
+                showToast(errorText, "danger");
                 return;
             }
 
@@ -463,7 +535,7 @@
             }
             updateTopStatus("");
         } catch (_) {
-            updateTopStatus("Could not send message.");
+            showToast("Could not send message.", "danger");
         } finally {
             sendingComposer = false;
             setComposerSubmittingState(false);
@@ -484,7 +556,7 @@
 
             const payload = await response.json().catch(() => ({}));
             if (!response.ok || !payload.ok) {
-                updateTopStatus(payload.error || "Delete failed.");
+                showToast(payload.error || "Delete failed.", "danger");
                 return;
             }
 
@@ -503,7 +575,7 @@
             updateTopStatus("");
             await loadNewMessages(false);
         } catch (_) {
-            updateTopStatus("Delete failed.");
+            showToast("Delete failed.", "danger");
         }
     }
 
@@ -576,6 +648,7 @@
             bindEvidenceGuards(detailContent);
             bindEvidencePlaceholders(detailContent);
             bindLightGallery(detailContent);
+            formatLocalTimestamps(detailContent);
         } catch (_) {
             detailContent.innerHTML = '<div class="alert alert-danger">Could not load candidate details.</div>';
         }
@@ -598,7 +671,19 @@
     }
 
     function insertMarkdown(ta, opts) {
-        const { before = "", after = before, placeholder = "text", linePrefix = "", block = false } = opts;
+        const {
+            before = "",
+            after = before,
+            placeholder = "text",
+            linePrefix = "",
+            block = false,
+            // When set, only this slice of `placeholder` is selected after
+            // insertion (instead of the whole placeholder). Useful for
+            // mention templates like "TS0000" where we want just the digits
+            // to be replaceable.
+            selectOffset = null,
+            selectLength = null,
+        } = opts;
         const start = ta.selectionStart;
         const end = ta.selectionEnd;
         const val = ta.value;
@@ -620,8 +705,19 @@
             cursorEnd = cursorStart + selected.length;
         } else {
             insert = before + placeholder + after;
-            cursorStart = start + before.length;
-            cursorEnd = cursorStart + placeholder.length;
+            const placeholderStart = start + before.length;
+            if (
+                Number.isInteger(selectOffset) &&
+                Number.isInteger(selectLength) &&
+                selectOffset >= 0 &&
+                selectOffset + selectLength <= placeholder.length
+            ) {
+                cursorStart = placeholderStart + selectOffset;
+                cursorEnd = cursorStart + selectLength;
+            } else {
+                cursorStart = placeholderStart;
+                cursorEnd = cursorStart + placeholder.length;
+            }
         }
 
         insertTextAt(ta, insert, start, end);
@@ -700,6 +796,118 @@
         }
     }
 
+    // Shared markdown-editor actions. Used by both the dashboard composer
+    // and the standalone edit-incident page.
+    const MD_ACTIONS = {
+        bold: (ta) => insertMarkdown(ta, { before: "**", placeholder: "bold text" }),
+        italic: (ta) => insertMarkdown(ta, { before: "*", placeholder: "italic text" }),
+        strike: (ta) => insertMarkdown(ta, { before: "~~", placeholder: "strikethrough" }),
+        code: (ta) => insertMarkdown(ta, { before: "`", placeholder: "code" }),
+        codeblock: (ta) => insertMarkdown(ta, { before: "```\n", after: "\n```", placeholder: "code block", block: true }),
+        quote: (ta) => insertMarkdown(ta, { linePrefix: "> ", placeholder: "quote", block: true }),
+        ul: (ta) => insertMarkdown(ta, { linePrefix: "- ", placeholder: "item", block: true }),
+        ol: (ta) => insertMarkdown(ta, { linePrefix: "1. ", placeholder: "item", block: true }),
+        link: (ta) => insertMarkdown(ta, { before: "[", after: "](url)", placeholder: "link text" }),
+        image: (ta) => insertMarkdown(ta, { before: "![", after: "](url)", placeholder: "alt text" }),
+        mention: (ta) => insertMarkdown(ta, {
+            placeholder: "TS0000",
+            selectOffset: 2,
+            selectLength: 4,
+        }),
+        undo: (ta) => { ta.focus(); document.execCommand("undo"); },
+        redo: (ta) => { ta.focus(); document.execCommand("redo"); },
+    };
+
+    function bindMarkdownEditorsIn(scopeEl) {
+        if (!scopeEl) return;
+
+        scopeEl.querySelectorAll(".md-toolbar").forEach((toolbar) => {
+            if (toolbar.dataset.mdBound === "1") return;
+            const target = toolbar.dataset.target ? document.getElementById(toolbar.dataset.target) : null;
+            if (!target) return;
+            toolbar.dataset.mdBound = "1";
+
+            toolbar.querySelectorAll(".md-tb-btn[data-action]").forEach((btn) => {
+                btn.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    const action = btn.dataset.action;
+                    if (action === "upload") {
+                        const input = document.createElement("input");
+                        input.type = "file";
+                        input.accept = "image/jpeg,image/png,image/gif,image/webp";
+                        input.addEventListener("change", () => {
+                            const file = input.files && input.files[0];
+                            if (file) uploadImageForTextarea(target, file);
+                        });
+                        input.click();
+                        return;
+                    }
+                    if (MD_ACTIONS[action]) MD_ACTIONS[action](target);
+                });
+            });
+        });
+
+        scopeEl.querySelectorAll(".md-editor-wrap").forEach((wrap) => {
+            if (wrap.dataset.mdTabsBound === "1") return;
+            const tabBtns = wrap.querySelectorAll(".md-tab-btn");
+            const inputPane = wrap.querySelector(".md-pane-input");
+            const previewPane = wrap.querySelector(".md-pane-preview");
+            if (!tabBtns.length || !inputPane || !previewPane) return;
+            wrap.dataset.mdTabsBound = "1";
+
+            tabBtns.forEach((btn) => {
+                btn.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    tabBtns.forEach((other) => other.classList.remove("active"));
+                    btn.classList.add("active");
+                    if (btn.dataset.tab === "input") {
+                        inputPane.style.display = "";
+                        previewPane.style.display = "none";
+                    } else {
+                        inputPane.style.display = "none";
+                        previewPane.style.display = "";
+                        refreshPreview(wrap);
+                    }
+                });
+            });
+
+            const reloadBtn = wrap.querySelector(".md-preview-reload");
+            if (reloadBtn) {
+                reloadBtn.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    refreshPreview(wrap);
+                });
+            }
+        });
+    }
+
+    // Client-side preflight for video attachments. Mirrors server-side
+    // MAX_VIDEO_SIZE (40 MB) so the user gets instant feedback instead of
+    // uploading the whole file only to be rejected.
+    const VIDEO_EXT_SET = new Set(["mp4", "mov", "webm", "mkv", "avi"]);
+    const CLIENT_MAX_VIDEO_BYTES = 40 * 1024 * 1024;
+
+    function fileLooksLikeVideo(file) {
+        if (!file) return false;
+        if (file.type && file.type.startsWith("video/")) return true;
+        const ext = (file.name || "").split(".").pop()?.toLowerCase();
+        return Boolean(ext && VIDEO_EXT_SET.has(ext));
+    }
+
+    function validateEvidenceInput(input) {
+        if (!input || !input.files || !input.files[0]) return true;
+        const file = input.files[0];
+        if (fileLooksLikeVideo(file) && file.size > CLIENT_MAX_VIDEO_BYTES) {
+            showToast(
+                `Video quá lớn (${formatFileSize(file.size)}). Dung lượng tối đa là 40 MB.`,
+                "danger",
+            );
+            input.value = "";
+            return false;
+        }
+        return true;
+    }
+
     function initComposeBar() {
         const form = document.getElementById("create-incident-form");
         if (!form) return;
@@ -734,7 +942,13 @@
 
         refreshComposeEvidenceIndicator = updateEvidenceIndicator;
         if (evidenceInput) {
-            evidenceInput.addEventListener("change", updateEvidenceIndicator);
+            evidenceInput.addEventListener("change", () => {
+                if (!validateEvidenceInput(evidenceInput)) {
+                    updateEvidenceIndicator();
+                    return;
+                }
+                updateEvidenceIndicator();
+            });
             updateEvidenceIndicator();
         }
 
@@ -782,75 +996,20 @@
             }
         });
 
-        const actions = {
-            bold: (ta) => insertMarkdown(ta, { before: "**", placeholder: "bold text" }),
-            italic: (ta) => insertMarkdown(ta, { before: "*", placeholder: "italic text" }),
-            strike: (ta) => insertMarkdown(ta, { before: "~~", placeholder: "strikethrough" }),
-            code: (ta) => insertMarkdown(ta, { before: "`", placeholder: "code" }),
-            codeblock: (ta) => insertMarkdown(ta, { before: "```\n", after: "\n```", placeholder: "code block", block: true }),
-            quote: (ta) => insertMarkdown(ta, { linePrefix: "> ", placeholder: "quote", block: true }),
-            ul: (ta) => insertMarkdown(ta, { linePrefix: "- ", placeholder: "item", block: true }),
-            ol: (ta) => insertMarkdown(ta, { linePrefix: "1. ", placeholder: "item", block: true }),
-            link: (ta) => insertMarkdown(ta, { before: "[", after: "](url)", placeholder: "link text" }),
-            image: (ta) => insertMarkdown(ta, { before: "![", after: "](url)", placeholder: "alt text" }),
-            mention: (ta) => insertMarkdown(ta, { placeholder: "TS0032" }),
-            undo: (ta) => { ta.focus(); document.execCommand("undo"); },
-            redo: (ta) => { ta.focus(); document.execCommand("redo"); },
-        };
+        bindMarkdownEditorsIn(form);
+    }
 
-        form.querySelectorAll(".md-toolbar").forEach((toolbar) => {
-            const target = toolbar.dataset.target ? document.getElementById(toolbar.dataset.target) : null;
-            if (!target) return;
+    function initEditIncidentPage() {
+        const form = document.getElementById("edit-incident-form");
+        if (!form) return;
+        bindMarkdownEditorsIn(form);
 
-            toolbar.querySelectorAll(".md-tb-btn[data-action]").forEach((btn) => {
-                btn.addEventListener("click", (event) => {
-                    event.preventDefault();
-                    const action = btn.dataset.action;
-                    if (action === "upload") {
-                        const input = document.createElement("input");
-                        input.type = "file";
-                        input.accept = "image/jpeg,image/png,image/gif,image/webp";
-                        input.addEventListener("change", () => {
-                            const file = input.files && input.files[0];
-                            if (file) uploadImageForTextarea(target, file);
-                        });
-                        input.click();
-                        return;
-                    }
-                    if (actions[action]) actions[action](target);
-                });
+        const evidenceInput = form.querySelector('input[type="file"][name="evidence"]');
+        if (evidenceInput) {
+            evidenceInput.addEventListener("change", () => {
+                validateEvidenceInput(evidenceInput);
             });
-        });
-
-        form.querySelectorAll(".md-editor-wrap").forEach((wrap) => {
-            const tabBtns = wrap.querySelectorAll(".md-tab-btn");
-            const inputPane = wrap.querySelector(".md-pane-input");
-            const previewPane = wrap.querySelector(".md-pane-preview");
-            if (!tabBtns.length || !inputPane || !previewPane) return;
-
-            tabBtns.forEach((btn) => {
-                btn.addEventListener("click", () => {
-                    tabBtns.forEach((other) => other.classList.remove("active"));
-                    btn.classList.add("active");
-                    if (btn.dataset.tab === "input") {
-                        inputPane.style.display = "";
-                        previewPane.style.display = "none";
-                    } else {
-                        inputPane.style.display = "none";
-                        previewPane.style.display = "";
-                        refreshPreview(wrap);
-                    }
-                });
-            });
-
-            const reloadBtn = wrap.querySelector(".md-preview-reload");
-            if (reloadBtn) {
-                reloadBtn.addEventListener("click", (event) => {
-                    event.preventDefault();
-                    refreshPreview(wrap);
-                });
-            }
-        });
+        }
     }
 
     document.addEventListener("click", (event) => {
@@ -864,13 +1023,26 @@
         const deleteForm = event.target.closest(".js-delete-incident-form");
         if (!deleteForm) return;
         event.preventDefault();
-        deleteIncidentWithoutReload(deleteForm);
+        if (deleteForm.dataset.confirmInFlight === "1") return;
+        deleteForm.dataset.confirmInFlight = "1";
+        showConfirmDialog({
+            title: deleteForm.dataset.confirmTitle || "Xoá tin nhắn này?",
+            message: deleteForm.dataset.confirmMessage
+                || "Tin nhắn và file đính kèm sẽ bị xoá vĩnh viễn.",
+            okText: "Xoá",
+            cancelText: "Huỷ",
+        }).then((confirmed) => {
+            deleteForm.dataset.confirmInFlight = "0";
+            if (confirmed) deleteIncidentWithoutReload(deleteForm);
+        });
     });
 
     bindEvidenceGuards(document);
     bindEvidencePlaceholders(document);
     bindLightGallery(document);
+    formatLocalTimestamps(document);
     initComposeBar();
+    initEditIncidentPage();
     syncComposerOffset();
 
     window.addEventListener("resize", syncComposerOffset, { passive: true });
