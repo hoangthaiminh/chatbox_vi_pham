@@ -4,68 +4,60 @@
 <div class="row g-4 align-items-stretch">
     <div class="col-12">
         <div class="shell-panel p-2 p-md-3">
-            <ul class="nav nav-pills nav-fill panel-tabs" id="monitor-tabs" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <a class="nav-link" href="{% url 'violations:dashboard' %}">Chat Box</a>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link active" type="button" aria-current="page">Statistics</button>
-                </li>
-            </ul>
+            <div id="monitor-tabs-content" data-ws-path="/ws/live/" data-updates-url="{% url 'violations:incident_updates' %}">
+                <div class="row g-3">
+                    {% if can_import_candidates %}
+                        <div class="col-12">
+                            <div class="card border-0 shadow-sm">
+                                <div class="card-body">
+                                    <h6 class="mb-2">Nhập danh sách thí sinh (CSV)</h6>
+                                    <form method="post" action="{% url 'violations:import_candidates' %}" enctype="multipart/form-data" class="row g-2 align-items-end">
+                                        {% csrf_token %}
+                                        <div class="col-12 col-md-8">
+                                            <label class="form-label small mb-1" for="id_csv_file">Tệp CSV</label>
+                                            <input type="file" name="csv_file" id="id_csv_file" class="form-control" accept=".csv" required>
+                                        </div>
+                                        <div class="col-12 col-md-4 d-grid">
+                                            <button class="btn btn-outline-dark" type="submit">
+                                                <i class="bi bi-upload me-1"></i>Nhập / cập nhật thí sinh
+                                            </button>
+                                        </div>
+                                    </form>
+                                    <p class="small text-muted mt-2 mb-0">
+                                        Cột gợi ý: SBD, Ho va ten, Truong, GVPT, Phong thi.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
 
-            <div class="mt-3" id="monitor-tabs-content" data-ws-path="/ws/live/" data-updates-url="{% url 'violations:incident_updates' %}">
-            <div class="row g-3">
-                {% if can_import_candidates %}
                     <div class="col-12">
                         <div class="card border-0 shadow-sm">
                             <div class="card-body">
-                                <h6 class="mb-2">Import Candidate List (CSV)</h6>
-                                <form method="post" action="{% url 'violations:import_candidates' %}" enctype="multipart/form-data" class="row g-2 align-items-end">
-                                    {% csrf_token %}
-                                    <div class="col-12 col-md-8">
-                                        <label class="form-label small mb-1" for="id_csv_file">CSV File</label>
-                                        <input type="file" name="csv_file" id="id_csv_file" class="form-control" accept=".csv" required>
-                                    </div>
-                                    <div class="col-12 col-md-4 d-grid">
-                                        <button class="btn btn-outline-dark" type="submit">
-                                            <i class="bi bi-upload me-1"></i>Import / Update Candidates
-                                        </button>
-                                    </div>
-                                </form>
-                                <p class="small text-muted mt-2 mb-0">
-                                    Suggested headers: SBD, Ho va ten, Truong, GVPT, Phong thi.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                {% endif %}
-
-                <div class="col-12">
-                    <div class="card border-0 shadow-sm">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <h5 class="mb-0">Violation Statistics</h5>
-                                <small class="text-muted">Click an SBD to view full detail</small>
-                            </div>
-                            <div id="stats-table-container">
-                                {% include 'violations/_stats_table.html' %}
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h5 class="mb-0">Thống kê vi phạm</h5>
+                                    <small class="text-muted">Nhấn vào SBD để xem chi tiết</small>
+                                </div>
+                                <div id="stats-table-container">
+                                    {% include 'violations/_stats_table.html' %}
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            </div>
         </div>
     </div>
 </div>
 
-<div class="offcanvas offcanvas-end candidate-offcanvas" tabindex="-1" id="candidateDetailCanvas" aria-labelledby="candidateDetailLabel">
+<div class="offcanvas offcanvas-end candidate-offcanvas" tabindex="-1"
+     id="candidateDetailCanvas" aria-labelledby="candidateDetailLabel">
     <div class="offcanvas-header border-bottom">
-        <h5 class="offcanvas-title" id="candidateDetailLabel">Candidate Detail</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        <h5 class="offcanvas-title" id="candidateDetailLabel">Chi tiết thí sinh</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Đóng"></button>
     </div>
     <div class="offcanvas-body" id="candidate-detail-content">
-        <div class="text-center py-4 text-muted">Select a candidate from statistics.</div>
+        <div class="text-center py-4 text-muted">Chọn một thí sinh từ bảng thống kê.</div>
     </div>
 </div>
 {% endblock %}

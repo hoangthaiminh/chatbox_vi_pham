@@ -1,105 +1,150 @@
 {% extends 'violations/base.html' %}
 
 {% block content %}
-<div class="row g-4 align-items-stretch">
-    <div class="col-12">
-        <div class="shell-panel p-2 p-md-3">
-            <ul class="nav nav-pills nav-fill panel-tabs" id="monitor-tabs" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="chat-tab" data-bs-toggle="pill" data-bs-target="#chat-pane" type="button" role="tab" aria-controls="chat-pane" aria-selected="true">
-                        Chat Box
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <a class="nav-link" href="{% url 'violations:statistics' %}">
-                        Statistics
-                    </a>
-                </li>
-            </ul>
+<div class="chat-layout" id="monitor-tabs-content" data-ws-path="/ws/live/" data-history-url="{% url 'violations:incident_history' %}" data-updates-url="{% url 'violations:incident_updates' %}">
+    <div class="live-header d-flex justify-content-between align-items-center mb-2">
+        <small class="text-muted" id="live-connection-status">Đang kết nối...</small>
+    </div>
 
-            <div class="tab-content mt-3" id="monitor-tabs-content" data-ws-path="/ws/live/" data-history-url="{% url 'violations:incident_history' %}" data-updates-url="{% url 'violations:incident_updates' %}">
-                <section class="tab-pane fade show active" id="chat-pane" role="tabpanel" aria-labelledby="chat-tab">
-                    <div class="row g-3">
-                        <div class="col-12">
-                            <div class="live-header d-flex justify-content-between align-items-center mb-2">
-                                <h5 class="mb-0">Live Incident Feed</h5>
-                                <small class="text-muted" id="live-connection-status">Connecting websocket...</small>
-                            </div>
-                            <div class="card border-0 shadow-sm">
-                                <div class="card-body p-2 p-md-3">
-                                    <div id="incident-feed" class="incident-feed">
-                                        <div id="incident-top-status" class="incident-top-status text-center small text-muted"></div>
-                                        <div id="incident-list-container" data-oldest-id="{{ oldest_incident_id|default:'' }}" data-newest-id="{{ newest_incident_id|default:'' }}" data-has-older="{{ has_older|yesno:'1,0' }}">
-                                            {% include 'violations/_incident_list.html' %}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-12">
-                            <div class="card border-0 shadow-sm">
-                                <div class="card-body">
-                                    {% if can_post %}
-                                        <form method="post" action="{% url 'violations:create_incident' %}" enctype="multipart/form-data" class="row g-2 align-items-start">
-                                            {% csrf_token %}
-                                            <div class="col-12 col-md-2">
-                                                <label class="form-label small mb-1" for="id_sbd">SBD</label>
-                                                <input type="text" name="sbd" id="id_sbd" class="form-control" placeholder="TS0032" required>
-                                            </div>
-                                            <div class="col-12 col-md-6">
-                                                <label class="form-label small mb-1" for="id_violation_text">Violation Content</label>
-                                                <textarea name="violation_text" id="id_violation_text" class="form-control" rows="2" placeholder="Example: TS0032 exchanged messages with TS0030" required></textarea>
-                                            </div>
-                                            <div class="col-12 col-md-3">
-                                                <label class="form-label small mb-1" for="id_evidence">Image/Video</label>
-                                                <input type="file" name="evidence" id="id_evidence" class="form-control" accept="image/*,video/*">
-                                            </div>
-                                            <div class="col-12 col-md-1 d-grid">
-                                                <label class="form-label small mb-1 d-none d-md-block">&nbsp;</label>
-                                                <button class="btn btn-dark" type="submit">
-                                                    <i class="bi bi-send"></i>
-                                                </button>
-                                            </div>
-                                        </form>
-                                        <p class="text-muted small mt-2 mb-0">
-                                            If a violation message references another SBD, both candidates are automatically counted in statistics.
-                                        </p>
-                                    {% else %}
-                                        <div class="alert alert-secondary mb-0">
-                                            This account can view data only. Posting/editing is allowed only for room admins and super admins.
-                                        </div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-            </div>
+    <div id="incident-feed" class="incident-feed incident-feed-fullscreen">
+        <div id="incident-top-status" class="incident-top-status text-center small text-muted"></div>
+        <div id="incident-list-container" data-oldest-id="{{ oldest_incident_id|default:'' }}" data-newest-id="{{ newest_incident_id|default:'' }}" data-has-older="{{ has_older|yesno:'1,0' }}">
+            {% include 'violations/_incident_list.html' %}
         </div>
     </div>
+
 </div>
 
-<div class="offcanvas offcanvas-end candidate-offcanvas" tabindex="-1" id="candidateDetailCanvas" aria-labelledby="candidateDetailLabel">
+<div id="mention-suggest-tip" class="mention-suggest-tip" role="tooltip"></div>
+
+<div class="offcanvas offcanvas-end candidate-offcanvas" tabindex="-1"
+     id="candidateDetailCanvas" aria-labelledby="candidateDetailLabel">
     <div class="offcanvas-header border-bottom">
-        <h5 class="offcanvas-title" id="candidateDetailLabel">Candidate Detail</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        <h5 class="offcanvas-title" id="candidateDetailLabel">Thông tin Thí sinh</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Đóng"></button>
     </div>
     <div class="offcanvas-body" id="candidate-detail-content">
-        <div class="text-center py-4 text-muted">Select a candidate from statistics.</div>
+        <div class="text-center py-4 text-muted">Chọn một thí sinh từ bảng thống kê.</div>
     </div>
 </div>
+{% endblock %}
 
-<div class="modal fade" id="evidencePreviewModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Evidence Preview</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+{% block bottom_bar %}
+{% if can_post %}
+<form method="post" action="{% url 'violations:create_incident' %}"
+      enctype="multipart/form-data"
+      id="create-incident-form"
+      class="compose-bar compose-bar--simple"
+      data-mode="simple"
+      novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="is_markdown" id="id_is_markdown" value="0">
+
+    <div class="compose-simple">
+        <div class="compose-sbd">
+            <input type="text" name="sbd" id="id_sbd"
+                   class="form-control"
+                   placeholder="TS0032"
+                   pattern="[A-Za-z0-9]{1,9}"
+                   maxlength="9"
+                   title="SBD"
+                   required autocomplete="off">
+            <div class="invalid-feedback" id="sbd-error"></div>
+        </div>
+
+        <div class="compose-kind">
+            <select name="incident_kind" id="id_incident_kind" class="form-select" title="Phân loại lỗi">
+                <option value="violation" selected>Vi phạm</option>
+                <option value="reminder">Nhắc nhở</option>
+            </select>
+        </div>
+
+        <div class="compose-text-wrap mention-textarea-wrap">
+            <input type="text" name="violation_text" id="id_violation_text_simple"
+                   class="form-control compose-simple-input"
+                   placeholder="Nhập nội dung vi phạm…"
+                   autocomplete="off">
+            <button type="button"
+                    class="compose-expand-btn"
+                    id="compose-expand-btn"
+                    title="Mở rộng (Markdown)">
+                <i class="bi bi-arrows-fullscreen"></i>
+            </button>
+            <div class="mention-dropdown" role="listbox"></div>
+        </div>
+
+        <label class="compose-video" for="id_evidence" title="Đính kèm ảnh hoặc video">
+            <i class="bi bi-paperclip"></i>
+            <input type="file" name="evidence" id="id_evidence"
+                   class="d-none" accept="image/*,video/*">
+            <span class="compose-video-filename small text-muted" id="video-filename"></span>
+        </label>
+
+        <button class="btn btn-dark compose-send" type="submit" title="Gửi">
+            <i class="bi bi-send"></i>
+        </button>
+    </div>
+
+    <div class="compose-expanded" id="compose-expanded" hidden>
+        <div class="md-editor-wrap" id="md-editor-main">
+
+            <div class="md-tab-bar">
+                <button type="button" class="md-tab-btn active" data-tab="input">
+                    <i class="bi bi-pencil me-1"></i>Nhập
+                </button>
+                <button type="button" class="md-tab-btn" data-tab="preview">
+                    <i class="bi bi-eye me-1"></i>Xem trước
+                </button>
+                <span class="md-tab-spacer"></span>
+                <button type="button" class="md-collapse-btn" id="compose-collapse-btn" title="Thu nhỏ">
+                    <i class="bi bi-arrows-angle-contract"></i>
+                </button>
             </div>
-            <div class="modal-body text-center" id="evidence-preview-body"></div>
+
+            <div class="md-pane md-pane-input">
+                <div class="md-toolbar" data-target="id_violation_text_full">
+                    <button type="button" class="md-tb-btn" data-action="undo"      title="Hoàn tác (Ctrl+Z)"><i class="bi bi-arrow-counterclockwise"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="redo"      title="Làm lại (Ctrl+Y)"><i class="bi bi-arrow-clockwise"></i></button>
+                    <span class="md-tb-sep"></span>
+                    <button type="button" class="md-tb-btn" data-action="bold"      title="In đậm (Ctrl+B)"><i class="bi bi-type-bold"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="italic"    title="In nghiêng (Ctrl+I)"><i class="bi bi-type-italic"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="strike"    title="Gạch ngang"><i class="bi bi-type-strikethrough"></i></button>
+                    <span class="md-tb-sep"></span>
+                    <button type="button" class="md-tb-btn" data-action="code"      title="Mã lệnh"><i class="bi bi-code"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="codeblock" title="Khối mã"><i class="bi bi-code-square"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="quote"     title="Trích dẫn"><i class="bi bi-blockquote-left"></i></button>
+                    <span class="md-tb-sep"></span>
+                    <button type="button" class="md-tb-btn" data-action="ul"        title="Danh sách không thứ tự"><i class="bi bi-list-ul"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="ol"        title="Danh sách có thứ tự"><i class="bi bi-list-ol"></i></button>
+                    <span class="md-tb-sep"></span>
+                    <button type="button" class="md-tb-btn" data-action="link"      title="Liên kết (Ctrl+K)"><i class="bi bi-link-45deg"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="image"     title="Chèn ảnh (qua URL)"><i class="bi bi-image"></i></button>
+                    <button type="button" class="md-tb-btn" data-action="upload"    title="Tải ảnh từ thiết bị"><i class="bi bi-cloud-upload"></i></button>
+                    <span class="md-tb-sep"></span>
+                    <button type="button" class="md-tb-btn md-tb-mention" data-action="mention" title="Nhắc SBD (@)"><i class="bi bi-person-fill"></i></button>
+                </div>
+                <div class="mention-textarea-wrap">
+                    <textarea name="violation_text_full" id="id_violation_text_full"
+                              class="form-control md-textarea" rows="6"
+                              placeholder="Nhập nội dung vi phạm…"></textarea>
+                    <div class="mention-dropdown" role="listbox"></div>
+                </div>
+            </div>
+
+            <div class="md-pane md-pane-preview" style="display:none;">
+                <div class="md-preview-content markdown-body" id="md-preview-content"></div>
+                <div class="md-preview-footer">
+                    <button type="button" class="btn btn-sm btn-outline-secondary md-preview-reload" id="md-preview-reload">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Tải lại xem trước
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
+</form>
+{% else %}
+<div class="compose-bar compose-bar--viewer">
+    <span class="text-muted small"><i class="bi bi-eye me-1"></i>Chế độ chỉ xem — chỉ Admin mới được đăng tin nhắn.</span>
 </div>
+{% endif %}
 {% endblock %}

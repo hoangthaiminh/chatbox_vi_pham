@@ -1,0 +1,35 @@
+{% load violations_extras %}
+
+{% if mode == "preview" %}
+
+    {% with bubble_side="chat-bubble-other" row_side="chat-row-other" %}
+        <div class="chat-row mb-3 {{ row_side }}">
+            <article class="incident-item incident-item--preview chat-bubble p-3 p-md-4 {{ bubble_side }}">
+                {% include "violations/_incident_card_body.html" with incident=incident mode=mode editable=False %}
+            </article>
+        </div>
+    {% endwith %}
+{% elif mode == "mini" %}
+    <article class="incident-mini incident-item p-3 mb-3">
+        {% include "violations/_incident_card_body.html" with incident=incident mode=mode editable=False %}
+    </article>
+{% else %}
+
+    {% if incident.created_by_id and incident.created_by_id == current_user_id %}
+        {% with bubble_side="chat-bubble-mine" row_side="chat-row-mine" %}
+            <div class="chat-row mb-3 {{ row_side }}" data-incident-id="{{ incident.id|default:'' }}">
+                <article class="incident-item chat-bubble p-3 p-md-4 {{ bubble_side }}">
+                    {% include "violations/_incident_card_body.html" with incident=incident mode=mode editable=True %}
+                </article>
+            </div>
+        {% endwith %}
+    {% else %}
+        {% with bubble_side="chat-bubble-other" row_side="chat-row-other" %}
+            <div class="chat-row mb-3 {{ row_side }}" data-incident-id="{{ incident.id|default:'' }}">
+                <article class="incident-item chat-bubble p-3 p-md-4 {{ bubble_side }}">
+                    {% include "violations/_incident_card_body.html" with incident=incident mode=mode editable=True %}
+                </article>
+            </div>
+        {% endwith %}
+    {% endif %}
+{% endif %}

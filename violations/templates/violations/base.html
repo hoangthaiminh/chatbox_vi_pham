@@ -1,15 +1,15 @@
 {% load static %}
 <!doctype html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Exam Fraud Monitor</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>Giám sát Gian lận Thi cử</title>
+    <link href="{% static 'vendor/be-vietnam-pro/be-vietnam-pro.css' %}" rel="stylesheet">
     <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
     <link href="{% static 'vendor/bootstrap-icons/css/bootstrap-icons.min.css' %}" rel="stylesheet">
+
+    <link rel="stylesheet" href="{% static 'vendor/lightgallery/css/lightgallery-bundle.min.css' %}">
     <link href="{% static 'violations/css/app.css' %}" rel="stylesheet">
     {% block extra_head %}{% endblock %}
 </head>
@@ -20,54 +20,100 @@
     <nav class="navbar navbar-expand-lg border-bottom border-light-subtle sticky-top shadow-sm frosted-navbar">
         <div class="container-fluid px-3 px-md-4">
             <a class="navbar-brand fw-bold" href="{% url 'violations:dashboard' %}">
-                <i class="bi bi-shield-exclamation me-2"></i>Fraud Monitor
+                <i class="bi bi-shield-exclamation me-2"></i>Giám sát Gian lận
             </a>
-            <div class="d-flex align-items-center gap-2 ms-auto">
-                <span class="badge rounded-pill text-bg-light border">{{ role_label|default:'Guest Viewer' }}</span>
-                {% if user.is_authenticated %}
-                    <span class="badge rounded-pill text-bg-dark">
-                        <i class="bi bi-person-circle me-1"></i>{{ user.username }}
-                    </span>
-                    <a href="{% url 'violations:logout' %}" class="btn btn-outline-secondary btn-sm">Logout</a>
-                {% else %}
-                    <a href="{% url 'violations:login' %}" class="btn btn-outline-dark btn-sm">Admin Login</a>
-                {% endif %}
+            <button class="navbar-toggler app-navbar-toggler" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#appPrimaryNav"
+                    aria-controls="appPrimaryNav" aria-expanded="false"
+                    aria-label="Mở/đóng điều hướng">
+                <span class="navbar-toggler-icon-wrap">
+                    <i class="bi bi-list"></i>
+                </span>
+            </button>
+            <div class="collapse navbar-collapse app-primary-nav" id="appPrimaryNav">
+                {% with current_page=request.resolver_match.url_name %}
+                    <div class="d-flex flex-wrap align-items-center gap-2 ms-lg-3 me-lg-auto page-switch-nav">
+                        <a href="{% url 'violations:dashboard' %}" class="btn btn-sm {% if current_page == 'dashboard' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+                            Hộp thoại
+                        </a>
+                        <a href="{% url 'violations:statistics' %}" class="btn btn-sm {% if current_page == 'statistics' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+                            Thống kê
+                        </a>
+                    </div>
+                {% endwith %}
+                <div class="d-flex flex-wrap align-items-center gap-2 ms-lg-auto app-user-area">
+                    <span class="badge rounded-pill text-bg-light border">{{ role_label|default:'Khách' }}</span>
+                    {% if user.is_authenticated %}
+                        <span class="badge rounded-pill text-bg-dark">
+                            <i class="bi bi-person-circle me-1"></i>{{ user.username }}
+                        </span>
+                        <form method="post" action="{% url 'violations:logout' %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-secondary btn-sm">Đăng xuất</button>
+                        </form>
+                    {% else %}
+                        <a href="{% url 'violations:login' %}" class="btn btn-outline-dark btn-sm">Đăng nhập Admin</a>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </nav>
 
-    {% if messages %}
-        <div class="toast-container position-fixed top-0 end-0 p-3 app-toast-container">
+    <div class="toast-container position-fixed top-0 end-0 p-3 app-toast-container">
+        {% if messages %}
             {% for message in messages %}
                 <div class="toast border-0 app-toast
                     {% if message.tags == 'error' %}text-bg-danger{% elif message.tags == 'success' %}text-bg-success{% elif message.tags == 'warning' %}text-bg-warning{% else %}text-bg-dark{% endif %}"
-                    role="alert"
-                    aria-live="assertive"
-                    aria-atomic="true"
-                    data-bs-autohide="true"
-                    data-bs-delay="3500">
+                    role="alert" aria-live="assertive" aria-atomic="true"
+                    data-bs-autohide="true" data-bs-delay="3500">
                     <div class="toast-header">
-                        <strong class="me-auto">Notification</strong>
-                        <small class="text-muted">just now</small>
-                        <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+                        <strong class="me-auto">Thông báo</strong>
+                        <small class="text-muted">vừa xong</small>
+                        <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Đóng"></button>
                     </div>
                     <div class="toast-body">{{ message }}</div>
                 </div>
             {% endfor %}
-        </div>
-    {% endif %}
+        {% endif %}
+    </div>
 
-    <main class="container-fluid py-4 px-3 px-md-4">
+    <main class="container-fluid py-4 px-3 px-md-4 main-area">
         {% block content %}{% endblock %}
     </main>
 
+    {% block bottom_bar %}{% endblock %}
+
+    <div class="app-confirm-dialog" id="appConfirmDialog" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="appConfirmDialogTitle">
+        <div class="app-confirm-backdrop" data-confirm-close="1"></div>
+        <div class="app-confirm-panel" role="document">
+            <div class="app-confirm-icon">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+            </div>
+            <h5 class="app-confirm-title" id="appConfirmDialogTitle">Xác nhận</h5>
+            <p class="app-confirm-message" id="appConfirmDialogMessage">Bạn có chắc chắn muốn thực hiện hành động này?</p>
+            <div class="app-confirm-actions">
+                <button type="button" class="btn btn-outline-secondary app-confirm-cancel" data-confirm-close="1">
+                    Huỷ
+                </button>
+                <button type="button" class="btn btn-danger app-confirm-ok">
+                    <i class="bi bi-trash me-1"></i>Xoá
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+
+    <script src="{% static 'vendor/lightgallery/js/lightgallery.umd.min.js' %}"></script>
+    <script src="{% static 'vendor/lightgallery/js/plugins/lg-zoom.umd.min.js' %}"></script>
+    <script src="{% static 'vendor/lightgallery/js/plugins/lg-video.umd.min.js' %}"></script>
+
+    <script src="{% static 'vendor/marked/marked.min.js' %}"></script>
     <script src="{% static 'violations/js/app.js' %}"></script>
     <script>
         document.addEventListener("DOMContentLoaded", function () {
             document.querySelectorAll(".app-toast").forEach(function (el) {
-                const toast = new bootstrap.Toast(el);
-                toast.show();
+                new bootstrap.Toast(el).show();
             });
         });
     </script>

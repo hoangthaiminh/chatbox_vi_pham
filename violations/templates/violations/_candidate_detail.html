@@ -1,51 +1,86 @@
 {% load violations_extras %}
-<div class="candidate-detail-shell">
+<div class="candidate-detail-shell {% if rule_summary.is_out %}candidate-detail-shell--out{% endif %}">
     {% if candidate %}
-        <div class="row g-3 mb-3">
+        <div class="row g-3 mt-0 mb-3">
             <div class="col-6">
                 <div class="detail-label">SBD</div>
                 <div class="detail-value">{{ candidate.sbd }}</div>
             </div>
             <div class="col-6">
-                <div class="detail-label">Full Name</div>
-                <div class="detail-value">{{ candidate.full_name }}</div>
+                <div class="detail-label">Họ và tên</div>
+                <div class="detail-value detail-value-name">{{ candidate.full_name }}</div>
             </div>
             <div class="col-6">
-                <div class="detail-label">School</div>
+                <div class="detail-label">Trường</div>
                 <div class="detail-value">{{ candidate.school }}</div>
             </div>
             <div class="col-6">
-                <div class="detail-label">Room</div>
+                <div class="detail-label">Phòng</div>
                 <div class="detail-value">{{ candidate.exam_room|default:"-" }}</div>
             </div>
             <div class="col-12">
-                <div class="detail-label">Supervisor Teacher</div>
+                <div class="detail-label">Giáo viên phụ trách</div>
                 <div class="detail-value">{{ candidate.supervisor_teacher }}</div>
             </div>
         </div>
     {% else %}
-        <div class="alert alert-warning">Candidate profile for {{ sbd }} was not found in the imported list.</div>
+        <div class="alert alert-warning">
+            Không tìm thấy hồ sơ thí sinh <strong>{{ sbd }}</strong> trong danh sách đã nhập.
+        </div>
     {% endif %}
 
-    <h6 class="mb-3">Incident Timeline</h6>
+    <div class="candidate-rule-summary mb-3 {% if rule_summary.is_out %}candidate-rule-summary--out{% endif %}">
+        <span class="badge text-bg-danger">Vi phạm: {{ rule_summary.violation_count }}</span>
+        <span class="badge text-bg-info">Nhắc nhở: {{ rule_summary.reminder_count }}</span>
+        <span class="badge text-bg-warning">Quy đổi: {{ rule_summary.effective_violations }}</span>
+        {% if rule_summary.is_out %}
+            <span class="badge text-bg-danger">Cấm thi</span>
+        {% else %}
+            <span class="badge text-bg-success">Theo dõi</span>
+        {% endif %}
+    </div>
+
+    <h6 class="mb-3">Lịch sử sự việc</h6>
     {% for incident in incidents %}
         <article class="incident-mini mb-3 p-3">
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <span class="badge text-bg-danger">{{ incident.reported_sbd|upper }}</span>
-                <small class="text-muted">{{ incident.created_at|date:"Y-m-d H:i" }}</small>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <button type="button" class="badge text-bg-danger id-badge-btn js-open-candidate-detail" data-sbd="{{ incident.reported_sbd|upper }}" aria-label="Mở chi tiết cho {{ incident.reported_sbd|upper }}">
+                        {{ incident.reported_sbd|upper }}
+                    </button>
+                    {% if incident.incident_kind == 'reminder' %}
+                        <span class="badge text-bg-info">Nhắc nhở</span>
+                    {% else %}
+                        <span class="badge text-bg-danger-subtle text-danger-emphasis border">Vi phạm</span>
+                    {% endif %}
+                </div>
+                <small class="text-muted">
+                    <time class="js-local-time"
+                          datetime="{{ incident.created_at|date:'c' }}">{{ incident.created_at|date:"Y-m-d H:i" }}</time>
+                </small>
             </div>
-            <p class="mb-2">{{ incident.violation_text|highlight_ids }}</p>
+            <div class="mb-2 chat-text markdown-body">{{ incident.violation_text|render_violation:incident.is_markdown }}</div>
             {% if incident.evidence %}
                 {% if incident.evidence_is_image %}
-                    <img src="{% url 'violations:incident_evidence' incident.pk %}" class="img-fluid rounded evidence-guard" alt="Evidence" draggable="false">
+                    <div class="incident-img-wrap evidence-wrap evidence-wrap-loading mt-2"
+                         style="--evidence-ar: {{ incident.evidence_aspect_ratio }}; --evidence-natural-w: {{ incident.evidence_natural_width }};">
+                        <img src="{% url 'violations:incident_evidence' incident.pk %}" class="incident-legacy-img evidence-guard js-evidence-media evidence-media" alt="Evidence" draggable="false" loading="lazy" data-lg-src="{% url 'violations:incident_evidence' incident.pk %}">
+                    </div>
                 {% elif incident.evidence_is_video %}
-                    <video class="w-100 rounded evidence-guard" controls controlsList="nodownload noplaybackrate" disablePictureInPicture preload="metadata" oncontextmenu="return false">
-                        <source src="{% url 'violations:incident_evidence' incident.pk %}">
-                    </video>
+                    <div class="incident-video-wrap evidence-wrap evidence-wrap-loading mt-2"
+                         style="--evidence-ar: {{ incident.evidence_aspect_ratio }}; --evidence-natural-w: {{ incident.evidence_natural_width }};"
+                         data-video-src="{% url 'violations:incident_evidence' incident.pk %}">
+                        <video class="incident-video-thumb evidence-guard js-evidence-media evidence-media" preload="metadata" muted controlsList="nodownload noplaybackrate" disablePictureInPicture oncontextmenu="return false">
+                            <source src="{% url 'violations:incident_evidence' incident.pk %}">
+                        </video>
+                        <div class="video-play-overlay" aria-label="Phát video">
+                            <i class="bi bi-play-circle-fill"></i>
+                        </div>
+                    </div>
                 {% endif %}
             {% endif %}
         </article>
     {% empty %}
-        <p class="text-muted">No incidents available.</p>
+        <p class="text-muted">Chưa có sự việc nào.</p>
     {% endfor %}
 </div>

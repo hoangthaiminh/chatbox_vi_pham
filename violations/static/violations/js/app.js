@@ -1,20 +1,29 @@
 (function () {
-    const monitorRoot = document.getElementById("monitor-tabs-content");
+    "use strict";
+
+    const monitorRoot = document.getElementById("messenger-shell") || document.getElementById("monitor-tabs-content");
     const incidentFeed = document.getElementById("incident-feed");
     const incidentTopStatus = document.getElementById("incident-top-status");
     const incidentListContainer = document.getElementById("incident-list-container");
+    const composerForm = document.getElementById("create-incident-form") || document.querySelector(".composer-form");
+    const composerSubmitButton = composerForm ? composerForm.querySelector('button[type="submit"]') : null;
+    const composerDock = document.querySelector(".compose-bar") || document.querySelector(".composer-dock");
     const statsTableContainer = document.getElementById("stats-table-container");
     const liveConnectionStatus = document.getElementById("live-connection-status");
     const detailContent = document.getElementById("candidate-detail-content");
     const detailCanvasEl = document.getElementById("candidateDetailCanvas");
     const detailCanvas = detailCanvasEl ? new bootstrap.Offcanvas(detailCanvasEl) : null;
-    const evidenceModalEl = document.getElementById("evidencePreviewModal");
-    const evidenceModal = evidenceModalEl ? new bootstrap.Modal(evidenceModalEl) : null;
-    const evidenceBody = document.getElementById("evidence-preview-body");
+
     let liveSocket = null;
     let reconnectDelayMs = 1000;
     let loadingOlder = false;
     let loadingUpdates = false;
+    let sendingComposer = false;
+    let setComposeExpanded = null;
+    let refreshComposeEvidenceIndicator = null;
+
+    const PREVIEW_URL = "/incidents/preview/";
+    const UPLOAD_URL = "/incidents/upload-image/";
 
     function parseId(value) {
         const parsed = Number.parseInt(value, 10);
@@ -25,73 +34,302 @@
     let newestId = incidentListContainer ? parseId(incidentListContainer.dataset.newestId) : null;
     let hasOlder = incidentListContainer ? incidentListContainer.dataset.hasOlder === "1" : false;
 
-    function bindEvidenceGuards(scope) {
+    function updateConnectionStatus(text) {
+        if (liveConnectionStatus) liveConnectionStatus.textContent = text || "";
+    }
+
+    function updateTopStatus(text) {
+        if (incidentTopStatus) incidentTopStatus.textContent = text || "";
+    }
+
+    function setComposerSubmittingState(isSubmitting) {
+        if (composerSubmitButton) composerSubmitButton.disabled = isSubmitting;
+    }
+
+    function formatFileSize(bytes) {
+        if (!Number.isFinite(bytes) || bytes <= 0) return "";
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    function getCsrfToken() {
+        const el = document.querySelector("input[name=csrfmiddlewaretoken]");
+        if (el) return el.value;
+        const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+        return m ? decodeURIComponent(m[1]) : "";
+    }
+
+    function escHtml(value) {
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;");
+    }
+
+    function formatLocalTimestamps(scope) {
         const root = scope || document;
-        root.querySelectorAll(".evidence-guard").forEach((el) => {
+        const pad = (n) => String(n).padStart(2, "0");
+        root.querySelectorAll("time.js-local-time").forEach((el) => {
+            if (el.dataset.localized === "1") return;
+            const iso = el.getAttribute("datetime");
+            if (!iso) return;
+            const d = new Date(iso);
+            if (Number.isNaN(d.getTime())) return;
+            const text = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+            el.textContent = text;
+            try {
+                const tzName = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                el.title = tzName ? `${text} (${tzName})` : text;
+            } catch (_) {
+                el.title = text;
+            }
+            el.dataset.localized = "1";
+        });
+    }
+
+    function showConfirmDialog(options) {
+        const dialog = document.getElementById("appConfirmDialog");
+        if (!dialog) {
+            // Fallback to native confirm if the dialog is missing.
+            return Promise.resolve(window.confirm(options?.message || "Xác nhận?"));
+        }
+        const titleEl = dialog.querySelector(".app-confirm-title");
+        const messageEl = dialog.querySelector(".app-confirm-message");
+        const okBtn = dialog.querySelector(".app-confirm-ok");
+        const cancelBtn = dialog.querySelector(".app-confirm-cancel");
+
+        if (titleEl) titleEl.textContent = options?.title || "Xác nhận";
+        if (messageEl) messageEl.textContent = options?.message || "Bạn có chắc chắn muốn thực hiện?";
+        if (okBtn) {
+            okBtn.innerHTML = `<i class="bi bi-trash me-1"></i>${options?.okText || "Xoá"}`;
+            okBtn.classList.remove("btn-danger", "btn-dark");
+            okBtn.classList.add(options?.variant === "dark" ? "btn-dark" : "btn-danger");
+        }
+        if (cancelBtn) cancelBtn.textContent = options?.cancelText || "Huỷ";
+
+        return new Promise((resolve) => {
+            const cleanup = (result) => {
+                dialog.removeEventListener("click", onDialogClick);
+                document.removeEventListener("keydown", onKeyDown);
+                okBtn?.removeEventListener("click", onOk);
+                dialog.setAttribute("hidden", "");
+                dialog.setAttribute("aria-hidden", "true");
+                dialog.classList.remove("is-open");
+                resolve(result);
+            };
+            const onOk = () => cleanup(true);
+            const onDialogClick = (event) => {
+                if (event.target.closest("[data-confirm-close]")) cleanup(false);
+            };
+            const onKeyDown = (event) => {
+                if (event.key === "Escape") cleanup(false);
+                else if (event.key === "Enter") { event.preventDefault(); cleanup(true); }
+            };
+            okBtn?.addEventListener("click", onOk);
+            dialog.addEventListener("click", onDialogClick);
+            document.addEventListener("keydown", onKeyDown);
+
+            dialog.removeAttribute("hidden");
+            dialog.setAttribute("aria-hidden", "false");
+            dialog.classList.add("is-open");
+            requestAnimationFrame(() => okBtn?.focus());
+        });
+    }
+
+    function showToast(message, variant) {
+        const container = document.querySelector(".toast-container");
+        if (!container || typeof bootstrap === "undefined") {
+            updateTopStatus(message);
+            return;
+        }
+
+        const el = document.createElement("div");
+        el.className = `toast app-toast align-items-center text-bg-${variant || "danger"} border-0`;
+        el.setAttribute("role", "alert");
+        el.innerHTML = `
+            <div class="d-flex">
+              <div class="toast-body">${escHtml(message)}</div>
+                            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Đóng"></button>
+            </div>`;
+        container.appendChild(el);
+        new bootstrap.Toast(el, { delay: 2800 }).show();
+        el.addEventListener("hidden.bs.toast", () => el.remove());
+    }
+
+    function bindEvidenceGuards(scope) {
+        (scope || document).querySelectorAll(".evidence-guard").forEach((el) => {
             el.setAttribute("draggable", "false");
             el.addEventListener("dragstart", (event) => event.preventDefault());
             el.addEventListener("contextmenu", (event) => event.preventDefault());
         });
     }
 
-    function blockClipboardForEvidence() {
-        document.addEventListener("copy", (event) => {
-            const activeEvidence = document.activeElement && document.activeElement.closest(".evidence-wrap, .candidate-detail-shell");
-            if (activeEvidence) {
-                event.preventDefault();
+    function isEvidenceMediaReady(mediaEl) {
+        if (!mediaEl) return true;
+        if (mediaEl.tagName === "IMG") {
+            return mediaEl.complete && mediaEl.naturalWidth > 0;
+        }
+        if (mediaEl.tagName === "VIDEO") {
+            return mediaEl.readyState >= 1;
+        }
+        return true;
+    }
+
+    function bindEvidencePlaceholders(scope) {
+        const root = scope || document;
+        root.querySelectorAll(".evidence-wrap").forEach((wrapEl) => {
+            const mediaEl = wrapEl.querySelector(".js-evidence-media");
+            if (!mediaEl) {
+                wrapEl.classList.remove("evidence-wrap-loading");
+                return;
             }
+
+            const revealMedia = () => {
+                wrapEl.classList.remove("evidence-wrap-loading");
+            };
+
+            if (isEvidenceMediaReady(mediaEl)) {
+                revealMedia();
+                return;
+            }
+
+            if (mediaEl.dataset.placeholderBound === "1") {
+                return;
+            }
+
+            mediaEl.dataset.placeholderBound = "1";
+            const readyEvent = mediaEl.tagName === "VIDEO" ? "loadedmetadata" : "load";
+            mediaEl.addEventListener(readyEvent, revealMedia, { once: true });
+            mediaEl.addEventListener("error", revealMedia, { once: true });
+        });
+    }
+
+    function buildGalleryItems(rootEl) {
+        const items = [];
+        const seen = new Set();
+
+        rootEl.querySelectorAll(".markdown-body img, .incident-legacy-img").forEach((img) => {
+            const src = img.dataset.lgSrc || img.src;
+            if (!src || seen.has(src)) return;
+            seen.add(src);
+            items.push({ src, thumb: src });
         });
 
-        document.addEventListener("keydown", (event) => {
-            if ((event.ctrlKey || event.metaKey) && ["s", "u", "p"].includes(event.key.toLowerCase())) {
-                const evidenceVisible = document.querySelector(".evidence-wrap img, .evidence-wrap video, .candidate-detail-shell img, .candidate-detail-shell video");
-                if (evidenceVisible) {
-                    event.preventDefault();
-                }
-            }
+        rootEl.querySelectorAll(".incident-video-wrap").forEach((wrap) => {
+            const videoSrc = wrap.dataset.videoSrc;
+            if (!videoSrc || seen.has(videoSrc)) return;
+            seen.add(videoSrc);
+            items.push({
+                video: {
+                    source: [{ src: videoSrc, type: "video/mp4" }],
+                    attributes: { preload: "metadata", controls: true },
+                },
+                thumb: "",
+                subHtml: "<p>Video bằng chứng</p>",
+            });
+        });
+
+        return items;
+    }
+
+    function openLightGallery(items, index) {
+        if (!items.length || typeof lightGallery === "undefined") return;
+
+        const container = document.createElement("div");
+        container.style.display = "none";
+        document.body.appendChild(container);
+
+        const plugins = [];
+        if (typeof lgZoom !== "undefined") plugins.push(lgZoom);
+        if (typeof lgVideo !== "undefined") plugins.push(lgVideo);
+
+        const lg = lightGallery(container, {
+            plugins,
+            dynamic: true,
+            dynamicEl: items,
+            index,
+            licenseKey: "0000-0000-000-0000",
+            speed: 320,
+            mobileSettings: { controls: true, showCloseIcon: true, download: false },
+            download: false,
+            zoom: true,
+            showZoomInOutIcons: true,
+        });
+
+        requestAnimationFrame(() => lg.openGallery(index));
+        container.addEventListener("lgAfterClose", () => {
+            lg.destroy();
+            container.remove();
+        }, { once: true });
+    }
+
+    function bindLightGallery(scope) {
+        const root = scope || document;
+
+        root.querySelectorAll(".markdown-body img, .incident-legacy-img").forEach((img) => {
+            if (img.dataset.lgBound) return;
+            img.dataset.lgBound = "1";
+            img.addEventListener("click", () => {
+                const incidentEl = img.closest(".incident-item, .incident-mini, .candidate-detail-shell") || document;
+                const items = buildGalleryItems(incidentEl);
+                const src = img.dataset.lgSrc || img.src;
+                const idx = items.findIndex((it) => it.src === src);
+                openLightGallery(items, Math.max(0, idx));
+            });
+        });
+
+        root.querySelectorAll(".incident-video-wrap").forEach((wrap) => {
+            if (wrap.dataset.lgBound) return;
+            wrap.dataset.lgBound = "1";
+            wrap.addEventListener("click", () => {
+                const incidentEl = wrap.closest(".incident-item, .incident-mini, .candidate-detail-shell") || document;
+                const items = buildGalleryItems(incidentEl);
+                const src = wrap.dataset.videoSrc;
+                const idx = items.findIndex((it) => it.video && it.video.source && it.video.source[0].src === src);
+                openLightGallery(items, Math.max(0, idx));
+            });
         });
     }
 
-    function updateConnectionStatus(text) {
-        if (!liveConnectionStatus) {
-            return;
-        }
-        liveConnectionStatus.textContent = text;
-    }
-
-    function updateTopStatus(text) {
-        if (!incidentTopStatus) {
-            return;
-        }
-        incidentTopStatus.textContent = text || "";
-    }
-
-    function buildWebsocketUrl() {
-        if (!monitorRoot) {
-            return "";
-        }
-
-        const wsPath = monitorRoot.dataset.wsPath;
-        if (!wsPath) {
-            return "";
-        }
-
-        const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-        return `${protocol}://${window.location.host}${wsPath}`;
+    function syncComposerOffset() {
+        if (!composerDock) return;
+        const composerHeight = composerDock.getBoundingClientRect().height;
+        // Add a small breathing space so the last bubble never touches the fixed compose bar.
+        document.documentElement.style.setProperty("--composer-offset", `${Math.ceil(composerHeight + 12)}px`);
     }
 
     function isNearBottom() {
-        if (!incidentFeed) {
-            return true;
-        }
-        return incidentFeed.scrollHeight - incidentFeed.scrollTop - incidentFeed.clientHeight < 96;
+        const doc = document.documentElement;
+        return (doc.scrollHeight - (window.scrollY + window.innerHeight)) < 96;
     }
 
     function scrollToBottom() {
-        if (!incidentFeed) {
-            return;
+        syncComposerOffset();
+        const doc = document.documentElement;
+        doc.style.scrollBehavior = "auto";
+        window.scrollTo(0, Math.max(doc.scrollHeight - window.innerHeight, 0));
+        doc.style.scrollBehavior = "";
+    }
+
+    function forceInitialBottomScroll() {
+        if (!monitorRoot) return;
+
+        // Keep browser from restoring old scroll position when this page is reloaded.
+        if (window.history && "scrollRestoration" in window.history) {
+            window.history.scrollRestoration = "manual";
         }
-        incidentFeed.scrollTop = incidentFeed.scrollHeight;
+
+        const syncBottom = () => scrollToBottom();
+        syncBottom();
+        requestAnimationFrame(syncBottom);
+        window.setTimeout(syncBottom, 0);
+        window.setTimeout(syncBottom, 180);
+
+        if (document.readyState !== "complete") {
+            window.addEventListener("load", syncBottom, { once: true });
+        }
     }
 
     function htmlToNodes(html) {
@@ -100,48 +338,89 @@
         return Array.from(wrapper.children).filter((node) => !node.classList.contains("empty-state"));
     }
 
+    function getNodeIncidentId(node) {
+        if (!node || node.nodeType !== 1) return null;
+        if (node.matches(".chat-row[data-incident-id]")) {
+            return parseId(node.dataset.incidentId);
+        }
+        const row = node.querySelector(".chat-row[data-incident-id]");
+        return row ? parseId(row.dataset.incidentId) : null;
+    }
+
+    function filterOutExistingIncidentNodes(nodes) {
+        if (!incidentListContainer || !nodes.length) return nodes;
+
+        return nodes.filter((node) => {
+            const incidentId = getNodeIncidentId(node);
+            if (!Number.isFinite(incidentId)) return true;
+            return !incidentListContainer.querySelector(`.chat-row[data-incident-id='${incidentId}']`);
+        });
+    }
+
     function removeEmptyState() {
-        if (!incidentListContainer) {
-            return;
-        }
+        if (!incidentListContainer) return;
         const emptyState = incidentListContainer.querySelector(".empty-state");
-        if (emptyState) {
-            emptyState.remove();
-        }
+        if (emptyState) emptyState.remove();
+    }
+
+    function ensureEmptyState() {
+        if (!incidentListContainer) return;
+        const hasRows = incidentListContainer.querySelector(".chat-row");
+        const hasEmptyState = incidentListContainer.querySelector(".empty-state");
+        if (hasRows || hasEmptyState) return;
+
+        const empty = document.createElement("div");
+        empty.className = "empty-state text-center py-5";
+        empty.innerHTML = '<i class="bi bi-inbox display-6"></i><p class="mb-0 mt-2">Chưa có sự việc nào được ghi nhận.</p>';
+        incidentListContainer.appendChild(empty);
+    }
+
+    function recomputeIncidentBounds() {
+        if (!incidentListContainer) return;
+        const rows = incidentListContainer.querySelectorAll(".chat-row[data-incident-id]");
+        const ids = Array.from(rows)
+            .map((row) => parseId(row.dataset.incidentId))
+            .filter((id) => Number.isFinite(id));
+
+        oldestId = ids.length ? Math.min(...ids) : null;
+        newestId = ids.length ? Math.max(...ids) : null;
+
+        incidentListContainer.dataset.oldestId = oldestId || "";
+        incidentListContainer.dataset.newestId = newestId || "";
     }
 
     function prependIncidents(html) {
-        if (!incidentListContainer || !incidentFeed) {
-            return 0;
-        }
-
-        const nodes = htmlToNodes(html);
-        if (!nodes.length) {
-            return 0;
-        }
+        if (!incidentListContainer) return 0;
+        const nodes = filterOutExistingIncidentNodes(htmlToNodes(html));
+        if (!nodes.length) return 0;
 
         removeEmptyState();
-        const previousHeight = incidentFeed.scrollHeight;
-        const previousTop = incidentFeed.scrollTop;
+        const previousHeight = document.documentElement.scrollHeight;
+        const previousTop = window.scrollY;
         nodes.forEach((node) => incidentListContainer.prepend(node));
         bindEvidenceGuards(incidentListContainer);
-        incidentFeed.scrollTop = previousTop + (incidentFeed.scrollHeight - previousHeight);
+        nodes.forEach((node) => bindEvidencePlaceholders(node));
+        nodes.forEach((node) => bindLightGallery(node));
+        nodes.forEach((node) => formatLocalTimestamps(node));
+
+        const heightDelta = document.documentElement.scrollHeight - previousHeight;
+        window.scrollTo(0, previousTop + heightDelta);
+        recomputeIncidentBounds();
         return nodes.length;
     }
 
     function appendIncidents(html) {
-        if (!incidentListContainer) {
-            return 0;
-        }
-
-        const nodes = htmlToNodes(html);
-        if (!nodes.length) {
-            return 0;
-        }
+        if (!incidentListContainer) return 0;
+        const nodes = filterOutExistingIncidentNodes(htmlToNodes(html));
+        if (!nodes.length) return 0;
 
         removeEmptyState();
         nodes.forEach((node) => incidentListContainer.append(node));
         bindEvidenceGuards(incidentListContainer);
+        nodes.forEach((node) => bindEvidencePlaceholders(node));
+        nodes.forEach((node) => bindLightGallery(node));
+        nodes.forEach((node) => formatLocalTimestamps(node));
+        recomputeIncidentBounds();
         return nodes.length;
     }
 
@@ -152,62 +431,41 @@
     }
 
     async function loadOlderMessages() {
-        if (loadingOlder || !hasOlder || !monitorRoot || !oldestId) {
-            return;
-        }
+        if (loadingOlder || !hasOlder || !monitorRoot || !oldestId) return;
 
         const historyUrl = monitorRoot.dataset.historyUrl;
-        if (!historyUrl) {
-            return;
-        }
+        if (!historyUrl) return;
 
         loadingOlder = true;
-        updateTopStatus("Loading older messages...");
+        updateTopStatus("Đang tải các tin nhắn cũ hơn...");
 
         try {
             const response = await fetch(`${historyUrl}?before=${encodeURIComponent(oldestId)}`, {
-                headers: {
-                    "X-Requested-With": "XMLHttpRequest",
-                },
+                headers: { "X-Requested-With": "XMLHttpRequest" },
             });
             if (!response.ok) {
-                updateTopStatus("Failed to load older messages.");
+                updateTopStatus("Không thể tải tin nhắn cũ hơn.");
                 return;
             }
 
             const payload = await response.json();
-            const added = prependIncidents(payload.incidents_html);
-            if (payload.oldest_id) {
-                oldestId = payload.oldest_id;
-            }
-            if (newestId === null && payload.newest_id) {
-                newestId = payload.newest_id;
-            }
+            prependIncidents(payload.incidents_html);
+            if (payload.oldest_id) oldestId = payload.oldest_id;
+            if (newestId === null && payload.newest_id) newestId = payload.newest_id;
             hasOlder = Boolean(payload.has_older);
-
-            if (!hasOlder) {
-                updateTopStatus("You reached the first message.");
-            } else if (!added) {
-                updateTopStatus("");
-            } else {
-                updateTopStatus("");
-            }
-        } catch (error) {
-            updateTopStatus("Failed to load older messages.");
+            updateTopStatus(!hasOlder ? "Bạn đã đến tin nhắn đầu tiên." : "");
+        } catch (_) {
+            updateTopStatus("Không thể tải tin nhắn cũ hơn.");
         } finally {
             loadingOlder = false;
         }
     }
 
     async function loadNewMessages(forceStickBottom) {
-        if (loadingUpdates || !monitorRoot) {
-            return;
-        }
+        if (loadingUpdates || !monitorRoot) return;
 
         const updatesUrl = monitorRoot.dataset.updatesUrl;
-        if (!updatesUrl) {
-            return;
-        }
+        if (!updatesUrl) return;
 
         loadingUpdates = true;
         const shouldStickBottom = forceStickBottom || isNearBottom();
@@ -215,28 +473,18 @@
         try {
             const afterId = newestId || 0;
             const response = await fetch(`${updatesUrl}?after=${encodeURIComponent(afterId)}`, {
-                headers: {
-                    "X-Requested-With": "XMLHttpRequest",
-                },
+                headers: { "X-Requested-With": "XMLHttpRequest" },
             });
-            if (!response.ok) {
-                return;
-            }
+            if (!response.ok) return;
 
             const payload = await response.json();
             const added = appendIncidents(payload.incidents_html);
             mergeStatsHtml(payload);
 
-            if (payload.newest_id) {
-                newestId = payload.newest_id;
-            }
-            if (oldestId === null && payload.oldest_id) {
-                oldestId = payload.oldest_id;
-            }
+            if (payload.newest_id) newestId = payload.newest_id;
+            if (oldestId === null && payload.oldest_id) oldestId = payload.oldest_id;
 
-            if (shouldStickBottom && added > 0) {
-                scrollToBottom();
-            }
+            if (shouldStickBottom && added > 0) scrollToBottom();
         } catch (error) {
             console.debug("Update fetch failed:", error);
         } finally {
@@ -244,140 +492,577 @@
         }
     }
 
-    function connectLiveSocket() {
-        if (!monitorRoot) {
-            return;
+    async function handleComposerSubmit(event) {
+        event.preventDefault();
+        if (!composerForm || sendingComposer) return;
+
+        sendingComposer = true;
+        setComposerSubmittingState(true);
+        updateTopStatus("");
+
+        try {
+            const response = await fetch(composerForm.action, {
+                method: "POST",
+                body: new FormData(composerForm),
+                headers: { "X-Requested-With": "XMLHttpRequest" },
+            });
+
+            const contentType = response.headers.get("content-type") || "";
+            const payload = contentType.includes("application/json") ? await response.json() : null;
+
+            if (!response.ok || (payload && payload.ok === false)) {
+                const errorText = payload && payload.error ? payload.error : "Không thể gửi tin nhắn.";
+                showToast(errorText, "danger");
+                return;
+            }
+
+            composerForm.reset();
+            if (typeof refreshComposeEvidenceIndicator === "function") {
+                refreshComposeEvidenceIndicator();
+            }
+            if (payload && payload.incident_html) {
+                appendIncidents(payload.incident_html);
+                mergeStatsHtml(payload);
+                if (payload.newest_id) newestId = payload.newest_id;
+                if (oldestId === null && payload.newest_id) oldestId = payload.newest_id;
+                scrollToBottom();
+            } else {
+                await loadNewMessages(true);
+            }
+
+            if (typeof setComposeExpanded === "function") {
+                setComposeExpanded(false);
+            }
+            updateTopStatus("");
+        } catch (_) {
+            showToast("Không thể gửi tin nhắn.", "danger");
+        } finally {
+            sendingComposer = false;
+            setComposerSubmittingState(false);
         }
+    }
+
+    async function deleteIncidentWithoutReload(form) {
+        try {
+            const response = await fetch(form.action, {
+                method: "POST",
+                headers: {
+                    "X-CSRFToken": getCsrfToken(),
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: new FormData(form),
+                credentials: "same-origin",
+            });
+
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || !payload.ok) {
+                showToast(payload.error || "Xoá không thành công.", "danger");
+                return;
+            }
+
+            const incidentId = parseId(form.dataset.incidentId || payload.incident_id);
+            if (Number.isFinite(incidentId)) {
+                incidentListContainer
+                    ?.querySelectorAll(`.chat-row[data-incident-id='${incidentId}']`)
+                    .forEach((row) => row.remove());
+            } else {
+                const row = form.closest(".chat-row");
+                if (row) row.remove();
+            }
+
+            recomputeIncidentBounds();
+            ensureEmptyState();
+            updateTopStatus("");
+            await loadNewMessages(false);
+        } catch (_) {
+            showToast("Xoá không thành công.", "danger");
+        }
+    }
+
+    function buildWebsocketUrl() {
+        if (!monitorRoot) return "";
+        const wsPath = monitorRoot.dataset.wsPath;
+        if (!wsPath) return "";
+        const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+        return `${protocol}://${window.location.host}${wsPath}`;
+    }
+
+    function connectLiveSocket() {
+        if (!monitorRoot) return;
 
         const socketUrl = buildWebsocketUrl();
-        if (!socketUrl) {
-            return;
-        }
+        if (!socketUrl) return;
+        if (liveSocket && (liveSocket.readyState === WebSocket.OPEN || liveSocket.readyState === WebSocket.CONNECTING)) return;
 
-        if (liveSocket && (liveSocket.readyState === WebSocket.OPEN || liveSocket.readyState === WebSocket.CONNECTING)) {
-            return;
-        }
-
-        updateConnectionStatus("Connecting websocket...");
+        updateConnectionStatus("Đang kết nối thời gian thực...");
 
         try {
             liveSocket = new WebSocket(socketUrl);
         } catch (error) {
             console.debug("Websocket init failed:", error);
-            updateConnectionStatus("Realtime unavailable");
+            updateConnectionStatus("Kết nối thời gian thực tạm thời không khả dụng");
             return;
         }
 
         liveSocket.addEventListener("open", () => {
             reconnectDelayMs = 1000;
-            updateConnectionStatus("Live updates connected");
+            updateConnectionStatus("");
         });
 
         liveSocket.addEventListener("message", (event) => {
             try {
                 const payload = JSON.parse(event.data);
-                if (payload.type !== "live_event") {
-                    return;
-                }
-                loadNewMessages(false);
+                if (payload.type === "live_event") loadNewMessages(false);
             } catch (error) {
                 console.debug("Invalid websocket payload:", error);
             }
         });
 
         liveSocket.addEventListener("error", () => {
-            updateConnectionStatus("Realtime reconnecting...");
+            updateConnectionStatus("Đang kết nối lại thời gian thực...");
         });
 
         liveSocket.addEventListener("close", () => {
             liveSocket = null;
-            updateConnectionStatus("Realtime disconnected. Reconnecting...");
-            window.setTimeout(() => {
-                connectLiveSocket();
-            }, reconnectDelayMs);
+            updateConnectionStatus("Mất kết nối thời gian thực. Đang kết nối lại...");
+            window.setTimeout(connectLiveSocket, reconnectDelayMs);
             reconnectDelayMs = Math.min(reconnectDelayMs * 2, 30000);
         });
     }
 
     async function openCandidateDetail(sbd) {
-        if (!detailContent || !detailCanvas) {
-            return;
-        }
+        if (!detailContent || !detailCanvas) return;
 
-        detailContent.innerHTML = '<div class="text-center py-4 text-muted">Loading...</div>';
+        detailContent.innerHTML = '<div class="text-center py-4 text-muted">Đang tải...</div>';
         detailCanvas.show();
 
         try {
             const response = await fetch(`/stats/candidate/${encodeURIComponent(sbd)}/`, {
-                headers: {
-                    "X-Requested-With": "XMLHttpRequest",
-                },
+                headers: { "X-Requested-With": "XMLHttpRequest" },
             });
             if (!response.ok) {
-                detailContent.innerHTML = '<div class="alert alert-danger">Could not load candidate details.</div>';
+                detailContent.innerHTML = '<div class="alert alert-danger">Không thể tải chi tiết thí sinh.</div>';
                 return;
             }
             detailContent.innerHTML = await response.text();
             bindEvidenceGuards(detailContent);
-        } catch (error) {
-            detailContent.innerHTML = '<div class="alert alert-danger">Could not load candidate details.</div>';
+            bindEvidencePlaceholders(detailContent);
+            bindLightGallery(detailContent);
+            formatLocalTimestamps(detailContent);
+        } catch (_) {
+            detailContent.innerHTML = '<div class="alert alert-danger">Không thể tải chi tiết thí sinh.</div>';
         }
     }
 
-    function openEvidencePreview(kind, src) {
-        if (!evidenceModal || !evidenceBody) {
-            return;
+    function insertTextAt(ta, text, replaceStart, replaceEnd) {
+        ta.focus();
+        ta.setSelectionRange(replaceStart, replaceEnd);
+        let ok = false;
+        try {
+            ok = document.execCommand("insertText", false, text);
+        } catch (_) {
+            ok = false;
         }
+        if (!ok) {
+            const value = ta.value;
+            ta.value = value.slice(0, replaceStart) + text + value.slice(replaceEnd);
+            ta.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+    }
 
-        evidenceBody.innerHTML = "";
-        if (kind === "video") {
-            const video = document.createElement("video");
-            video.src = src;
-            video.controls = true;
-            video.className = "w-100 rounded evidence-guard";
-            video.setAttribute("controlsList", "nodownload noplaybackrate");
-            video.setAttribute("disablePictureInPicture", "");
-            video.setAttribute("oncontextmenu", "return false");
-            evidenceBody.appendChild(video);
+    function insertMarkdown(ta, opts) {
+        const {
+            before = "",
+            after = before,
+            placeholder = "text",
+            linePrefix = "",
+            block = false,
+            // When set, only this slice of `placeholder` is selected after
+            // insertion (instead of the whole placeholder). Useful for
+            // mention templates like "TS0000" where we want just the digits
+            // to be replaceable.
+            selectOffset = null,
+            selectLength = null,
+        } = opts;
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        const val = ta.value;
+        const selected = val.slice(start, end);
+        let insert;
+        let cursorStart;
+        let cursorEnd;
+
+        if (linePrefix) {
+            const lines = (selected || placeholder).split("\n").map((line) => linePrefix + line).join("\n");
+            const prefix = (block && start > 0 && val[start - 1] !== "\n") ? "\n" : "";
+            const suffix = (block && end < val.length && val[end] !== "\n") ? "\n" : "";
+            insert = prefix + lines + suffix;
+            cursorStart = start + prefix.length;
+            cursorEnd = cursorStart + lines.length;
+        } else if (selected) {
+            insert = before + selected + after;
+            cursorStart = start + before.length;
+            cursorEnd = cursorStart + selected.length;
         } else {
-            const image = document.createElement("img");
-            image.src = src;
-            image.alt = "Evidence";
-            image.className = "img-fluid rounded evidence-guard";
-            image.setAttribute("draggable", "false");
-            evidenceBody.appendChild(image);
+            insert = before + placeholder + after;
+            const placeholderStart = start + before.length;
+            if (
+                Number.isInteger(selectOffset) &&
+                Number.isInteger(selectLength) &&
+                selectOffset >= 0 &&
+                selectOffset + selectLength <= placeholder.length
+            ) {
+                cursorStart = placeholderStart + selectOffset;
+                cursorEnd = cursorStart + selectLength;
+            } else {
+                cursorStart = placeholderStart;
+                cursorEnd = cursorStart + placeholder.length;
+            }
         }
 
-        bindEvidenceGuards(evidenceBody);
-        evidenceModal.show();
+        insertTextAt(ta, insert, start, end);
+        ta.setSelectionRange(cursorStart, cursorEnd);
+    }
+
+    async function refreshPreview(editorWrap) {
+        const ta = editorWrap.querySelector("textarea");
+        const previewPane = editorWrap.querySelector(".md-pane-preview");
+        const content = previewPane?.querySelector(".md-preview-content");
+        if (!ta || !content) return;
+
+        content.innerHTML = "<div class='md-preview-skeleton'><div class='skel-line'></div><div class='skel-line'></div><div class='skel-line'></div></div>";
+
+        const sbdInput = document.getElementById("id_sbd");
+        const kindInput = document.getElementById("id_incident_kind");
+        const form = new FormData();
+        form.append("violation_text", ta.value);
+        form.append("sbd", sbdInput ? sbdInput.value : "");
+        form.append("incident_kind", kindInput ? kindInput.value : "violation");
+        form.append("is_markdown", "1");
+
+        try {
+            const res = await fetch(PREVIEW_URL, {
+                method: "POST",
+                headers: {
+                    "X-CSRFToken": getCsrfToken(),
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: form,
+                credentials: "same-origin",
+            });
+            if (!res.ok) throw new Error(`Preview HTTP ${res.status}`);
+            const data = await res.json();
+            content.innerHTML = data.html || "";
+            bindEvidenceGuards(content);
+            bindLightGallery(content);
+        } catch (_) {
+            content.innerHTML = '<div class="text-muted small">Không thể xem trước lúc này.</div>';
+        }
+    }
+
+    async function uploadImageForTextarea(ta, file) {
+        const selStart = ta.selectionStart;
+        const selEnd = ta.selectionEnd;
+        const selected = ta.value.slice(selStart, selEnd);
+        const alt = (selected && selected.trim()) || "ảnh";
+        const placeholder = `![Đang tải ${alt}...]()`;
+
+        insertTextAt(ta, placeholder, selStart, selEnd);
+
+        const form = new FormData();
+        form.append("image", file);
+
+        try {
+            const res = await fetch(UPLOAD_URL, {
+                method: "POST",
+                headers: {
+                    "X-CSRFToken": getCsrfToken(),
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: form,
+                credentials: "same-origin",
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.url) {
+                showToast(data.error || "Tải ảnh lên thất bại.", "danger");
+                return;
+            }
+
+            const replacement = `![${alt}](${data.url})`;
+            const idx = ta.value.indexOf(placeholder);
+            if (idx !== -1) {
+                insertTextAt(ta, replacement, idx, idx + placeholder.length);
+            }
+        } catch (_) {
+            showToast("Tải ảnh lên thất bại.", "danger");
+        }
+    }
+
+    // Shared markdown-editor actions. Used by both the dashboard composer
+    // and the standalone edit-incident page.
+    const MD_ACTIONS = {
+        bold: (ta) => insertMarkdown(ta, { before: "**", placeholder: "chữ đậm" }),
+        italic: (ta) => insertMarkdown(ta, { before: "*", placeholder: "chữ nghiêng" }),
+        strike: (ta) => insertMarkdown(ta, { before: "~~", placeholder: "gạch ngang" }),
+        code: (ta) => insertMarkdown(ta, { before: "`", placeholder: "mã lệnh" }),
+        codeblock: (ta) => insertMarkdown(ta, { before: "```\n", after: "\n```", placeholder: "khối mã", block: true }),
+        quote: (ta) => insertMarkdown(ta, { linePrefix: "> ", placeholder: "trích dẫn", block: true }),
+        ul: (ta) => insertMarkdown(ta, { linePrefix: "- ", placeholder: "mục", block: true }),
+        ol: (ta) => insertMarkdown(ta, { linePrefix: "1. ", placeholder: "mục", block: true }),
+        link: (ta) => insertMarkdown(ta, { before: "[", after: "](url)", placeholder: "văn bản liên kết" }),
+        image: (ta) => insertMarkdown(ta, { before: "![", after: "](url)", placeholder: "mô tả ảnh" }),
+        mention: (ta) => insertMarkdown(ta, {
+            placeholder: "TS0000",
+            selectOffset: 2,
+            selectLength: 4,
+        }),
+        undo: (ta) => { ta.focus(); document.execCommand("undo"); },
+        redo: (ta) => { ta.focus(); document.execCommand("redo"); },
+    };
+
+    function bindMarkdownEditorsIn(scopeEl) {
+        if (!scopeEl) return;
+
+        scopeEl.querySelectorAll(".md-toolbar").forEach((toolbar) => {
+            if (toolbar.dataset.mdBound === "1") return;
+            const target = toolbar.dataset.target ? document.getElementById(toolbar.dataset.target) : null;
+            if (!target) return;
+            toolbar.dataset.mdBound = "1";
+
+            toolbar.querySelectorAll(".md-tb-btn[data-action]").forEach((btn) => {
+                btn.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    const action = btn.dataset.action;
+                    if (action === "upload") {
+                        const input = document.createElement("input");
+                        input.type = "file";
+                        input.accept = "image/jpeg,image/png,image/gif,image/webp";
+                        input.addEventListener("change", () => {
+                            const file = input.files && input.files[0];
+                            if (file) uploadImageForTextarea(target, file);
+                        });
+                        input.click();
+                        return;
+                    }
+                    if (MD_ACTIONS[action]) MD_ACTIONS[action](target);
+                });
+            });
+        });
+
+        scopeEl.querySelectorAll(".md-editor-wrap").forEach((wrap) => {
+            if (wrap.dataset.mdTabsBound === "1") return;
+            const tabBtns = wrap.querySelectorAll(".md-tab-btn");
+            const inputPane = wrap.querySelector(".md-pane-input");
+            const previewPane = wrap.querySelector(".md-pane-preview");
+            if (!tabBtns.length || !inputPane || !previewPane) return;
+            wrap.dataset.mdTabsBound = "1";
+
+            tabBtns.forEach((btn) => {
+                btn.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    tabBtns.forEach((other) => other.classList.remove("active"));
+                    btn.classList.add("active");
+                    if (btn.dataset.tab === "input") {
+                        inputPane.style.display = "";
+                        previewPane.style.display = "none";
+                    } else {
+                        inputPane.style.display = "none";
+                        previewPane.style.display = "";
+                        refreshPreview(wrap);
+                    }
+                });
+            });
+
+            const reloadBtn = wrap.querySelector(".md-preview-reload");
+            if (reloadBtn) {
+                reloadBtn.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    refreshPreview(wrap);
+                });
+            }
+        });
+    }
+
+    // Client-side preflight for video attachments. Mirrors server-side
+    // MAX_VIDEO_SIZE (40 MB) so the user gets instant feedback instead of
+    // uploading the whole file only to be rejected.
+    const VIDEO_EXT_SET = new Set(["mp4", "mov", "webm", "mkv", "avi"]);
+    const CLIENT_MAX_VIDEO_BYTES = 40 * 1024 * 1024;
+
+    function fileLooksLikeVideo(file) {
+        if (!file) return false;
+        if (file.type && file.type.startsWith("video/")) return true;
+        const ext = (file.name || "").split(".").pop()?.toLowerCase();
+        return Boolean(ext && VIDEO_EXT_SET.has(ext));
+    }
+
+    function validateEvidenceInput(input) {
+        if (!input || !input.files || !input.files[0]) return true;
+        const file = input.files[0];
+        if (fileLooksLikeVideo(file) && file.size > CLIENT_MAX_VIDEO_BYTES) {
+            showToast(
+                `Video quá lớn (${formatFileSize(file.size)}). Dung lượng tối đa là 40 MB.`,
+                "danger",
+            );
+            input.value = "";
+            return false;
+        }
+        return true;
+    }
+
+    function initComposeBar() {
+        const form = document.getElementById("create-incident-form");
+        if (!form) return;
+
+        const simpleInput = document.getElementById("id_violation_text_simple");
+        const fullTextarea = document.getElementById("id_violation_text_full");
+        const isMarkdownField = document.getElementById("id_is_markdown");
+        const expandBtn = document.getElementById("compose-expand-btn");
+        const collapseBtn = document.getElementById("compose-collapse-btn");
+        const expandedWrap = document.getElementById("compose-expanded");
+        const evidenceInput = document.getElementById("id_evidence");
+        const evidenceLabel = form.querySelector(".compose-video");
+        const evidenceName = document.getElementById("video-filename");
+
+        const updateEvidenceIndicator = () => {
+            if (!evidenceInput || !evidenceLabel || !evidenceName) return;
+            const file = evidenceInput.files && evidenceInput.files[0];
+            if (!file) {
+                evidenceLabel.classList.remove("has-file");
+                evidenceName.textContent = "";
+                evidenceName.title = "";
+                return;
+            }
+
+            const kind = file.type && file.type.startsWith("image/") ? "Ảnh" : "Tệp";
+            const sizeText = formatFileSize(file.size);
+            const info = sizeText ? `${kind}: ${file.name} (${sizeText})` : `${kind}: ${file.name}`;
+            evidenceLabel.classList.add("has-file");
+            evidenceName.textContent = info;
+            evidenceName.title = info;
+        };
+
+        refreshComposeEvidenceIndicator = updateEvidenceIndicator;
+        if (evidenceInput) {
+            evidenceInput.addEventListener("change", () => {
+                if (!validateEvidenceInput(evidenceInput)) {
+                    updateEvidenceIndicator();
+                    return;
+                }
+                updateEvidenceIndicator();
+            });
+            updateEvidenceIndicator();
+        }
+
+        const setExpanded = (expanded) => {
+            if (!simpleInput || !fullTextarea || !isMarkdownField || !expandedWrap) return;
+
+            if (expanded) {
+                if (simpleInput.value && !fullTextarea.value) {
+                    fullTextarea.value = simpleInput.value;
+                }
+                form.dataset.mode = "expanded";
+                form.classList.add("is-expanded");
+                expandedWrap.hidden = false;
+                isMarkdownField.value = "1";
+                fullTextarea.name = "violation_text";
+                fullTextarea.setAttribute("required", "required");
+                simpleInput.name = "violation_text_simple_ignored";
+                simpleInput.removeAttribute("required");
+                fullTextarea.focus();
+            } else {
+                form.dataset.mode = "simple";
+                form.classList.remove("is-expanded");
+                expandedWrap.hidden = true;
+                isMarkdownField.value = "0";
+                simpleInput.name = "violation_text";
+                simpleInput.setAttribute("required", "required");
+                fullTextarea.name = "violation_text_full_ignored";
+                fullTextarea.removeAttribute("required");
+            }
+            syncComposerOffset();
+        };
+
+        setComposeExpanded = setExpanded;
+
+        if (expandBtn) expandBtn.addEventListener("click", () => setExpanded(true));
+        if (collapseBtn) collapseBtn.addEventListener("click", () => setExpanded(false));
+
+        form.addEventListener("submit", () => {
+            if (form.dataset.mode === "expanded") {
+                fullTextarea.name = "violation_text";
+                isMarkdownField.value = "1";
+            } else {
+                simpleInput.name = "violation_text";
+                isMarkdownField.value = "0";
+            }
+        });
+
+        bindMarkdownEditorsIn(form);
+    }
+
+    function initEditIncidentPage() {
+        const form = document.getElementById("edit-incident-form");
+        if (!form) return;
+        bindMarkdownEditorsIn(form);
+
+        const evidenceInput = form.querySelector('input[type="file"][name="evidence"]');
+        if (evidenceInput) {
+            evidenceInput.addEventListener("change", () => {
+                validateEvidenceInput(evidenceInput);
+            });
+        }
     }
 
     document.addEventListener("click", (event) => {
         const candidateButton = event.target.closest(".js-open-candidate-detail");
         if (candidateButton) {
             openCandidateDetail(candidateButton.dataset.sbd);
-            return;
-        }
-
-        const evidencePreview = event.target.closest(".js-evidence-preview");
-        if (evidencePreview) {
-            openEvidencePreview(evidencePreview.dataset.kind, evidencePreview.dataset.src);
         }
     });
 
+    document.addEventListener("submit", (event) => {
+        const deleteForm = event.target.closest(".js-delete-incident-form");
+        if (!deleteForm) return;
+        event.preventDefault();
+        if (deleteForm.dataset.confirmInFlight === "1") return;
+        deleteForm.dataset.confirmInFlight = "1";
+        showConfirmDialog({
+            title: deleteForm.dataset.confirmTitle || "Xoá tin nhắn này?",
+            message: deleteForm.dataset.confirmMessage
+                || "Tin nhắn và file đính kèm sẽ bị xoá vĩnh viễn.",
+            okText: "Xoá",
+            cancelText: "Huỷ",
+        }).then((confirmed) => {
+            deleteForm.dataset.confirmInFlight = "0";
+            if (confirmed) deleteIncidentWithoutReload(deleteForm);
+        });
+    });
+
     bindEvidenceGuards(document);
-    blockClipboardForEvidence();
+    bindEvidencePlaceholders(document);
+    bindLightGallery(document);
+    formatLocalTimestamps(document);
+    initComposeBar();
+    initEditIncidentPage();
+    syncComposerOffset();
+
+    window.addEventListener("resize", syncComposerOffset, { passive: true });
+
+    if (composerDock && window.ResizeObserver) {
+        const composeObserver = new ResizeObserver(syncComposerOffset);
+        composeObserver.observe(composerDock);
+    }
 
     if (incidentFeed) {
-        incidentFeed.addEventListener("scroll", () => {
-            if (incidentFeed.scrollTop < 80) {
-                loadOlderMessages();
-            }
-        });
+        window.addEventListener("scroll", () => {
+            if (window.scrollY < 80) loadOlderMessages();
+        }, { passive: true });
     }
 
     if (monitorRoot) {
-        scrollToBottom();
+        forceInitialBottomScroll();
+        if (composerForm) composerForm.addEventListener("submit", handleComposerSubmit);
         connectLiveSocket();
         document.addEventListener("visibilitychange", () => {
             if (!document.hidden) {

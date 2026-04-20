@@ -3,55 +3,85 @@
         <thead>
             <tr>
                 <th>SBD</th>
-                <th>Candidate</th>
-                <th>School</th>
-                <th>Room</th>
-                <th>Supervisor</th>
-                <th>Total Violations</th>
-                <th>Latest</th>
+                <th>Thí sinh</th>
+                <th>Trường</th>
+                <th>Phòng</th>
+                <th>Giám thị</th>
+                <th>Vi phạm</th>
+                <th>Nhắc nhở</th>
+                <th>Quy đổi</th>
+                <th>Trạng thái</th>
+                <th>Mới nhất</th>
             </tr>
         </thead>
         <tbody>
             {% for row in candidate_stats %}
-                <tr>
+                <tr class="{% if row.is_out %}stats-row-out{% endif %}">
                     <td>
-                        <button class="btn btn-link p-0 fw-semibold text-decoration-none js-open-candidate-detail" data-sbd="{{ row.sbd|upper }}">
+                        <button class="btn btn-link p-0 fw-semibold text-decoration-none js-open-candidate-detail {% if row.is_out %}stats-out-link{% endif %}" data-sbd="{{ row.sbd|upper }}">
                             {{ row.sbd|upper }}
                         </button>
                     </td>
-                    <td>{{ row.full_name }}</td>
+                    <td class="stats-candidate-name">{{ row.full_name }}</td>
                     <td>{{ row.school }}</td>
                     <td>{{ row.exam_room|default:"-" }}</td>
                     <td>{{ row.supervisor_teacher }}</td>
-                    <td><span class="badge text-bg-warning">{{ row.total_violations }}</span></td>
+                    <td><span class="badge text-bg-danger">{{ row.violation_count }}</span></td>
+                    <td><span class="badge text-bg-info">{{ row.reminder_count }}</span></td>
+                    <td><span class="badge text-bg-warning">{{ row.effective_violations }}</span></td>
+                    <td>
+                        {% if row.is_out %}
+                            <span class="badge text-bg-danger">Cấm thi</span>
+                        {% else %}
+                            <span class="badge text-bg-success">Theo dõi</span>
+                        {% endif %}
+                    </td>
                     <td>{{ row.last_violation_at|date:"Y-m-d H:i" }}</td>
                 </tr>
             {% empty %}
                 <tr>
-                    <td colspan="7" class="text-center text-muted py-4">No statistics yet.</td>
+                    <td colspan="10" class="text-center text-muted py-4">Chưa có thống kê.</td>
                 </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
 
+<p class="small text-muted mt-2 mb-0">Quy chế: 2 nhắc nhở = 1 vi phạm; 2 vi phạm quy đổi = cấm thi.</p>
+
 {% if unknown_stats %}
     <div class="mt-4">
-        <h6 class="mb-3">Unmatched SBD Entries</h6>
+        <h6 class="mb-3">SBD chưa khớp hồ sơ</h6>
         <div class="table-responsive">
             <table class="table align-middle table-sm mb-0">
                 <thead>
                     <tr>
                         <th>SBD</th>
-                        <th>Total Violations</th>
-                        <th>Latest</th>
+                        <th>Vi phạm</th>
+                        <th>Nhắc nhở</th>
+                        <th>Quy đổi</th>
+                        <th>Trạng thái</th>
+                        <th>Mới nhất</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for row in unknown_stats %}
-                        <tr>
-                            <td>{{ row.normalized_sbd }}</td>
-                            <td>{{ row.total_violations }}</td>
+                        <tr class="{% if row.is_out %}stats-row-out{% endif %}">
+                            <td>
+                                <button class="btn btn-link p-0 fw-semibold text-decoration-none js-open-candidate-detail {% if row.is_out %}stats-out-link{% endif %}" data-sbd="{{ row.normalized_sbd|upper }}">
+                                    {{ row.normalized_sbd|upper }}
+                                </button>
+                            </td>
+                            <td>{{ row.violation_count }}</td>
+                            <td>{{ row.reminder_count }}</td>
+                            <td>{{ row.effective_violations }}</td>
+                            <td>
+                                {% if row.is_out %}
+                                    <span class="badge text-bg-danger">Cấm thi</span>
+                                {% else %}
+                                    <span class="badge text-bg-success">Theo dõi</span>
+                                {% endif %}
+                            </td>
                             <td>{{ row.last_violation_at|date:"Y-m-d H:i" }}</td>
                         </tr>
                     {% endfor %}

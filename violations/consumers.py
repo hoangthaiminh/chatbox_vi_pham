@@ -16,7 +16,7 @@ class LiveDashboardConsumer(AsyncWebsocketConsumer):
 
     async def receive(self, text_data=None, bytes_data=None):
         # The server drives updates; clients do not need to send messages.
-        return
+        pass
 
     async def live_update(self, event):
         await self.send_live_event()

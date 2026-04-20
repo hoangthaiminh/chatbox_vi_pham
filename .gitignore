@@ -32,4 +32,5 @@ staticfiles/
 Thumbs.db
 
 # others
-static/
+/static/
+/staticfiles/

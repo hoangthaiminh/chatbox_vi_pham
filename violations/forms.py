@@ -2,29 +2,34 @@ from pathlib import Path
 
 from django import forms
 
-ALLOWED_EVIDENCE_EXTENSIONS = {
-    ".jpg",
-    ".jpeg",
-    ".png",
-    ".gif",
-    ".webp",
-    ".mp4",
-    ".mov",
-    ".webm",
-    ".mkv",
-    ".avi",
+from .models import Incident
+from .services import MAX_SBD_LENGTH, MAX_VIOLATION_TEXT_LEN, is_valid_sbd_syntax
+
+ALLOWED_IMAGE_EXTENSIONS = {
+    ".jpg", ".jpeg", ".png", ".gif", ".webp",
 }
-MAX_EVIDENCE_SIZE = 100 * 1024 * 1024
+ALLOWED_VIDEO_EXTENSIONS = {
+    ".mp4", ".mov", ".webm", ".mkv", ".avi",
+}
+MAX_IMAGE_SIZE = 20 * 1024 * 1024   # 20 MB
+MAX_VIDEO_SIZE = 40 * 1024 * 1024   # 40 MB
 
 
 class IncidentBaseForm(forms.Form):
-    sbd = forms.CharField(max_length=20, label="SBD")
-    violation_text = forms.CharField(
-        label="Violation Content",
-        widget=forms.Textarea(attrs={"rows": 2}),
-        max_length=2000,
+    sbd = forms.CharField(max_length=MAX_SBD_LENGTH, label="SBD", strip=True)
+    incident_kind = forms.ChoiceField(
+        label="Phân loại",
+        choices=Incident.INCIDENT_KIND_CHOICES,
+        required=False,
+        initial=Incident.KIND_VIOLATION,
     )
-    evidence = forms.FileField(label="Image/Video", required=False)
+    violation_text = forms.CharField(
+        label="Nội dung vi phạm",
+        widget=forms.Textarea(attrs={"rows": 5}),
+        max_length=MAX_VIOLATION_TEXT_LEN,
+        strip=True,
+    )
+    evidence = forms.FileField(label="Bằng chứng (Ảnh hoặc Video)", required=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -35,23 +40,48 @@ class IncidentBaseForm(forms.Form):
                 field.widget.attrs["class"] = "form-control"
 
     def clean_sbd(self):
-        return self.cleaned_data["sbd"].upper().strip()
+        value = self.cleaned_data["sbd"].strip()
+        if not value:
+            raise forms.ValidationError("SBD không được để trống.")
+        if not is_valid_sbd_syntax(value):
+            raise forms.ValidationError(
+                "SBD phải từ 2 đến 9 ký tự, chỉ gồm chữ cái (a-z, A-Z) và/hoặc chữ số (0-9). "
+                "Không được có dấu cách, ký tự đặc biệt hoặc chữ tiếng Việt."
+            )
+        return value.upper()
 
     def clean_violation_text(self):
-        return self.cleaned_data["violation_text"].strip()
+        value = self.cleaned_data["violation_text"].strip()
+        if len(value) > MAX_VIOLATION_TEXT_LEN:
+            raise forms.ValidationError(
+                f"Nội dung vi phạm tối đa {MAX_VIOLATION_TEXT_LEN} ký tự."
+            )
+        return value
+
+    def clean_incident_kind(self):
+        value = self.cleaned_data.get("incident_kind")
+        return Incident.normalize_incident_kind(value)
 
     def clean_evidence(self):
         evidence = self.cleaned_data.get("evidence")
         if not evidence:
             return evidence
-
         extension = Path(evidence.name).suffix.lower()
-        if extension not in ALLOWED_EVIDENCE_EXTENSIONS:
-            raise forms.ValidationError("Only image/video files are allowed.")
+        if extension in ALLOWED_IMAGE_EXTENSIONS:
+            if evidence.size > MAX_IMAGE_SIZE:
+                raise forms.ValidationError("File ảnh phải ≤ 20 MB.")
+            return evidence
 
-        if evidence.size > MAX_EVIDENCE_SIZE:
-            raise forms.ValidationError("The evidence file must be <= 100MB.")
-        return evidence
+        if extension in ALLOWED_VIDEO_EXTENSIONS:
+            if evidence.size > MAX_VIDEO_SIZE:
+                raise forms.ValidationError(
+                    f"Video quá lớn: tối đa {MAX_VIDEO_SIZE // (1024 * 1024)} MB."
+                )
+            return evidence
+
+        raise forms.ValidationError(
+            "Chỉ chấp nhận file ảnh/video (jpg, jpeg, png, gif, webp, mp4, mov, webm, mkv, avi)."
+        )
 
 
 class IncidentCreateForm(IncidentBaseForm):
@@ -59,8 +89,8 @@ class IncidentCreateForm(IncidentBaseForm):
 
 
 class IncidentEditForm(IncidentBaseForm):
-    remove_evidence = forms.BooleanField(required=False, label="Remove existing evidence")
+    remove_evidence = forms.BooleanField(required=False, label="Xoá bằng chứng hiện có")
 
 
 class CandidateImportForm(forms.Form):
-    csv_file = forms.FileField(label="CSV file")
+    csv_file = forms.FileField(label="Tệp CSV")

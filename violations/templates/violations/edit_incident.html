@@ -1,38 +1,117 @@
 {% extends 'violations/base.html' %}
 
 {% block content %}
+<div id="mention-suggest-tip" class="mention-suggest-tip" role="tooltip"></div>
+
 <div class="row justify-content-center">
-    <div class="col-12 col-lg-8">
+    <div class="col-12 col-lg-9">
         <div class="card border-0 shadow-sm">
             <div class="card-body p-4">
-                <h4 class="mb-3">Edit Incident</h4>
-                <form method="post" enctype="multipart/form-data" class="row g-3">
+                <h4 class="mb-3">Sửa Tin nhắn</h4>
+                <form method="post" enctype="multipart/form-data" class="row g-3"
+                      id="edit-incident-form" novalidate>
                     {% csrf_token %}
+
                     <div class="col-md-3">
                         <label for="id_sbd" class="form-label">SBD</label>
-                        {{ form.sbd }}
+                        <input type="text" name="sbd" id="id_sbd" class="form-control"
+                               value="{{ form.sbd.value|default:'' }}"
+                               pattern="[A-Za-z0-9]{1,9}"
+                               maxlength="9"
+                               title="Chỉ chữ cái tiếng Anh và chữ số (tối đa 9 ký tự)"
+                               required autocomplete="off">
+                        <div class="invalid-feedback" id="sbd-error"></div>
                     </div>
-                    <div class="col-md-9">
-                        <label for="id_violation_text" class="form-label">Violation Content</label>
-                        {{ form.violation_text }}
+
+                    <div class="col-md-3">
+                        <label for="id_incident_kind" class="form-label">Phân loại</label>
+                        <select name="incident_kind" id="id_incident_kind" class="form-select">
+                            <option value="violation" {% if form.incident_kind.value == 'violation' or not form.incident_kind.value %}selected{% endif %}>Vi phạm</option>
+                            <option value="reminder" {% if form.incident_kind.value == 'reminder' %}selected{% endif %}>Nhắc nhở</option>
+                        </select>
                     </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label">Nội dung Vi phạm</label>
+                        <div class="md-editor-wrap mention-textarea-wrap" id="md-editor-main">
+
+                            <div class="md-tab-bar">
+                                <button type="button" class="md-tab-btn active" data-tab="input">
+                                    <i class="bi bi-pencil me-1"></i>Nhập
+                                </button>
+                                <button type="button" class="md-tab-btn" data-tab="preview">
+                                    <i class="bi bi-eye me-1"></i>Xem trước
+                                </button>
+                            </div>
+
+                            <div class="md-pane md-pane-input">
+                                <div class="md-toolbar" data-target="id_violation_text">
+                                    <button type="button" class="md-tb-btn" data-action="undo"      title="Hoàn tác (Ctrl+Z)"><i class="bi bi-arrow-counterclockwise"></i></button>
+                                    <button type="button" class="md-tb-btn" data-action="redo"      title="Làm lại (Ctrl+Y)"><i class="bi bi-arrow-clockwise"></i></button>
+                                    <span class="md-tb-sep"></span>
+                                    <button type="button" class="md-tb-btn" data-action="bold"      title="In đậm"><i class="bi bi-type-bold"></i></button>
+                                    <button type="button" class="md-tb-btn" data-action="italic"    title="In nghiêng"><i class="bi bi-type-italic"></i></button>
+                                    <button type="button" class="md-tb-btn" data-action="strike"    title="Gạch ngang"><i class="bi bi-type-strikethrough"></i></button>
+                                    <span class="md-tb-sep"></span>
+                                    <button type="button" class="md-tb-btn" data-action="code"      title="Mã lệnh"><i class="bi bi-code"></i></button>
+                                    <button type="button" class="md-tb-btn" data-action="codeblock" title="Khối mã"><i class="bi bi-code-square"></i></button>
+                                    <button type="button" class="md-tb-btn" data-action="quote"     title="Trích dẫn"><i class="bi bi-blockquote-left"></i></button>
+                                    <span class="md-tb-sep"></span>
+                                    <button type="button" class="md-tb-btn" data-action="ul"        title="Danh sách không thứ tự"><i class="bi bi-list-ul"></i></button>
+                                    <button type="button" class="md-tb-btn" data-action="ol"        title="Danh sách có thứ tự"><i class="bi bi-list-ol"></i></button>
+                                    <span class="md-tb-sep"></span>
+                                    <button type="button" class="md-tb-btn" data-action="link"      title="Liên kết"><i class="bi bi-link-45deg"></i></button>
+                                    <button type="button" class="md-tb-btn" data-action="image"     title="Chèn ảnh (qua URL)"><i class="bi bi-image"></i></button>
+                                    <button type="button" class="md-tb-btn" data-action="upload"    title="Tải ảnh từ thiết bị"><i class="bi bi-cloud-upload"></i></button>
+                                    <span class="md-tb-sep"></span>
+                                    <button type="button" class="md-tb-btn md-tb-mention" data-action="mention" title="Nhắc SBD (@)"><i class="bi bi-person-fill"></i></button>
+                                </div>
+                                <textarea name="violation_text" id="id_violation_text"
+                                          class="form-control md-textarea" rows="6"
+                                          required>{{ form.violation_text.value|default:'' }}</textarea>
+                                <div class="mention-dropdown" role="listbox"></div>
+                            </div>
+
+                            <div class="md-pane md-pane-preview" style="display:none;">
+                                <div class="md-preview-content markdown-body"></div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="col-md-8">
-                        <label for="id_evidence" class="form-label">Replace Image/Video (optional)</label>
-                        {{ form.evidence }}
+                        <label for="id_evidence" class="form-label">
+                            <i class="bi bi-paperclip me-1"></i>Thay thế File đính kèm (tuỳ chọn)
+                        </label>
+                        <input type="file" name="evidence" id="id_evidence"
+                               class="form-control" accept="image/*,video/*">
                     </div>
                     <div class="col-md-4 d-flex align-items-end">
                         <div class="form-check">
-                            {{ form.remove_evidence }}
-                            <label class="form-check-label" for="id_remove_evidence">Remove existing evidence</label>
+                            <input type="checkbox" name="remove_evidence" id="id_remove_evidence"
+                                   class="form-check-input"
+                                   {% if form.remove_evidence.value %}checked{% endif %}>
+                            <label class="form-check-label" for="id_remove_evidence">Xoá file đính kèm hiện tại</label>
                         </div>
                     </div>
+
                     <div class="col-12 d-flex gap-2 justify-content-end">
-                        <a href="{% url 'violations:dashboard' %}" class="btn btn-outline-secondary">Cancel</a>
-                        <button class="btn btn-dark" type="submit">Save Changes</button>
+                        <a href="{% url 'violations:dashboard' %}" class="btn btn-outline-secondary">Huỷ</a>
+                        <button class="btn btn-dark" type="submit">Lưu Thay đổi</button>
                     </div>
                 </form>
             </div>
         </div>
+    </div>
+</div>
+
+<div class="offcanvas offcanvas-end candidate-offcanvas" tabindex="-1"
+     id="candidateDetailCanvas" aria-labelledby="candidateDetailLabel">
+    <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title" id="candidateDetailLabel">Thông tin Thí sinh</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Đóng"></button>
+    </div>
+    <div class="offcanvas-body" id="candidate-detail-content">
+        <div class="text-center py-4 text-muted">Chọn một thí sinh từ bảng thống kê.</div>
     </div>
 </div>
 {% endblock %}

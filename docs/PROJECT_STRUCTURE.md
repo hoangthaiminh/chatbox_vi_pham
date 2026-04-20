@@ -9,31 +9,60 @@ chatbox_vi_pham/
 ├── manage.py
 ├── db.sqlite3
 ├── README.md
+├── requirements.txt
+├── pytest.ini
+├── conftest.py
 ├── sample_candidates.csv
+├── docs/
+│   ├── PROJECT_STRUCTURE.md
+│   ├── USAGE_GUIDE.md
+│   └── DEPLOY_PYTHONANYWHERE.md    # PA free-tier specific notes
 ├── chatbox_vi_pham/
-│   ├── settings.py
-│   ├── urls.py
+│   ├── settings.py                  # env-var driven, prod hardening
+│   ├── urls.py                      # serves /media/ in DEBUG
 │   ├── asgi.py
-│   └── wsgi.py
+│   └── wsgi.py                      # use this on PA (WSGI only)
 └── violations/
     ├── admin.py
     ├── apps.py
     ├── forms.py
     ├── models.py
-    ├── services.py
+    ├── services.py                  # SBD regex, mention extraction, sync
+    ├── image_uploads.py              # Pillow validation, EXIF strip, rate limit
     ├── urls.py
-    ├── views.py
+    ├── views.py                     # incident CRUD, preview, upload, CSV import
+    ├── realtime.py                  # payload builders, WS + polling helpers
+    ├── consumers.py                 # Django Channels WS consumer
+    ├── ws_events.py
+    ├── routing.py
     ├── migrations/
+    │   ├── 0001_initial.py
+    │   ├── 0002_create_default_groups.py
+    │   ├── 0003_shrink_sbd_max_length_to_9.py
+    │   └── 0004_add_sbd_indexes.py
     ├── management/commands/
     │   └── set_user_role.py
     ├── templates/violations/
     │   ├── base.html
     │   ├── dashboard.html
+    │   ├── statistics.html
     │   ├── login.html
     │   ├── edit_incident.html
     │   ├── _incident_list.html
+    │   ├── _incident_rows.html       # iterates incidents → _incident_card.html
+    │   ├── _incident_card.html       # SHARED card router (full|mini|preview)
+    │   ├── _incident_card_body.html  # SHARED card body
     │   ├── _stats_table.html
     │   └── _candidate_detail.html
+    ├── templatetags/
+    │   ├── __init__.py
+    │   └── violations_extras.py      # render_violation filter (markdown + mention)
+    ├── tests/
+    │   ├── __init__.py
+    │   ├── test_services_regex.py
+    │   ├── test_render_violation.py
+    │   ├── test_preview_endpoint.py
+    │   └── test_image_uploads.py
     └── static/violations/
         ├── css/app.css
         └── js/app.js
