@@ -1,28 +1,59 @@
 {% extends 'violations/base.html' %}
 
 {% block content %}
-<div class="row justify-content-center py-5">
-    <div class="col-12 col-md-6 col-lg-4">
-        <div class="card border-0 shadow-sm">
-            <div class="card-body p-4">
-                <h4 class="mb-3">Admin Login</h4>
-                <form method="post" class="vstack gap-3">
-                    {% csrf_token %}
-                    {{ form.non_field_errors }}
-                    <div>
-                        <label for="id_username" class="form-label">Username</label>
-                        {{ form.username }}
-                    </div>
-                    <div>
-                        <label for="id_password" class="form-label">Password</label>
-                        {{ form.password }}
-                    </div>
-                    <button type="submit" class="btn btn-dark">Login</button>
-                </form>
-                <p class="small text-muted mt-3 mb-0">
-                    Candidate and viewer accounts can open the dashboard without login.
-                </p>
+<div class="auth-wrap">
+    <div class="auth-card">
+        <div class="auth-card-body">
+            <div class="auth-header">
+                <div class="auth-logo"><i class="bi bi-shield-exclamation"></i></div>
+                <h4 class="auth-title mb-1">Admin Login</h4>
+                <p class="auth-subtitle">Đăng nhập để quản lý hệ thống giám sát.</p>
             </div>
+            <form method="post" class="auth-form" novalidate>
+                {% csrf_token %}
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger py-2 px-3 mb-3 small">
+                        {{ form.non_field_errors }}
+                    </div>
+                {% endif %}
+
+                <div class="auth-field {% if form.username.errors %}has-error{% endif %}">
+                    <input type="text"
+                           name="username"
+                           id="id_username"
+                           class="form-control auth-input"
+                           placeholder=" "
+                           autocomplete="username"
+                           autofocus
+                           required
+                           value="{{ form.username.value|default:'' }}">
+                    <label for="id_username" class="auth-label">Tên người dùng</label>
+                    {% if form.username.errors %}
+                        <div class="auth-error">{{ form.username.errors|join:", " }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="auth-field {% if form.password.errors %}has-error{% endif %}">
+                    <input type="password"
+                           name="password"
+                           id="id_password"
+                           class="form-control auth-input"
+                           placeholder=" "
+                           autocomplete="current-password"
+                           required>
+                    <label for="id_password" class="auth-label">Mật khẩu</label>
+                    {% if form.password.errors %}
+                        <div class="auth-error">{{ form.password.errors|join:", " }}</div>
+                    {% endif %}
+                </div>
+
+                <button type="submit" class="btn btn-dark auth-submit">
+                    <i class="bi bi-box-arrow-in-right me-2"></i>Đăng nhập
+                </button>
+            </form>
+            <p class="auth-hint">
+                Candidate and viewer accounts can open the dashboard without login.
+            </p>
         </div>
     </div>
 </div>

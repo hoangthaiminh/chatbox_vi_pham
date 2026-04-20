@@ -22,29 +22,39 @@
             <a class="navbar-brand fw-bold" href="{% url 'violations:dashboard' %}">
                 <i class="bi bi-shield-exclamation me-2"></i>Fraud Monitor
             </a>
-            {% with current_page=request.resolver_match.url_name %}
-                <div class="d-flex align-items-center gap-2 ms-md-3 me-auto page-switch-nav">
-                    <a href="{% url 'violations:dashboard' %}" class="btn btn-sm {% if current_page == 'dashboard' %}btn-dark{% else %}btn-outline-dark{% endif %}">
-                        Chat Box
-                    </a>
-                    <a href="{% url 'violations:statistics' %}" class="btn btn-sm {% if current_page == 'statistics' %}btn-dark{% else %}btn-outline-dark{% endif %}">
-                        Statistics
-                    </a>
+            <button class="navbar-toggler app-navbar-toggler" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#appPrimaryNav"
+                    aria-controls="appPrimaryNav" aria-expanded="false"
+                    aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon-wrap">
+                    <i class="bi bi-list"></i>
+                </span>
+            </button>
+            <div class="collapse navbar-collapse app-primary-nav" id="appPrimaryNav">
+                {% with current_page=request.resolver_match.url_name %}
+                    <div class="d-flex flex-wrap align-items-center gap-2 ms-lg-3 me-lg-auto page-switch-nav">
+                        <a href="{% url 'violations:dashboard' %}" class="btn btn-sm {% if current_page == 'dashboard' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+                            Chat Box
+                        </a>
+                        <a href="{% url 'violations:statistics' %}" class="btn btn-sm {% if current_page == 'statistics' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+                            Statistics
+                        </a>
+                    </div>
+                {% endwith %}
+                <div class="d-flex flex-wrap align-items-center gap-2 ms-lg-auto app-user-area">
+                    <span class="badge rounded-pill text-bg-light border">{{ role_label|default:'Guest Viewer' }}</span>
+                    {% if user.is_authenticated %}
+                        <span class="badge rounded-pill text-bg-dark">
+                            <i class="bi bi-person-circle me-1"></i>{{ user.username }}
+                        </span>
+                        <form method="post" action="{% url 'violations:logout' %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-secondary btn-sm">Logout</button>
+                        </form>
+                    {% else %}
+                        <a href="{% url 'violations:login' %}" class="btn btn-outline-dark btn-sm">Admin Login</a>
+                    {% endif %}
                 </div>
-            {% endwith %}
-            <div class="d-flex align-items-center gap-2 ms-auto">
-                <span class="badge rounded-pill text-bg-light border">{{ role_label|default:'Guest Viewer' }}</span>
-                {% if user.is_authenticated %}
-                    <span class="badge rounded-pill text-bg-dark">
-                        <i class="bi bi-person-circle me-1"></i>{{ user.username }}
-                    </span>
-                    <form method="post" action="{% url 'violations:logout' %}" class="d-inline">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-outline-secondary btn-sm">Logout</button>
-                    </form>
-                {% else %}
-                    <a href="{% url 'violations:login' %}" class="btn btn-outline-dark btn-sm">Admin Login</a>
-                {% endif %}
             </div>
         </div>
     </nav>
