@@ -1,0 +1,24 @@
+services:
+  app:
+    build: .
+    volumes:
+      - media_data:/app/media
+      - db_data:/app/db_volume
+    environment:
+      - DJANGO_DEBUG=0
+      - DJANGO_ALLOWED_HOSTS=*
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-django-insecure-prod-key-please-change-me}
+      - DATABASE_PATH=db_volume/db.sqlite3
+    ports:
+      - "9142:9142"
+    restart: always
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+
+volumes:
+  media_data:
+  db_data:
