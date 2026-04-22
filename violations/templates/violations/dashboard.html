@@ -86,60 +86,7 @@
     </div>
 
     <div class="compose-expanded" id="compose-expanded" hidden>
-        <div class="md-editor-wrap" id="md-editor-main">
-
-            <div class="md-tab-bar">
-                <button type="button" class="md-tab-btn active" data-tab="input">
-                    <i class="bi bi-pencil me-1"></i>Nhập
-                </button>
-                <button type="button" class="md-tab-btn" data-tab="preview">
-                    <i class="bi bi-eye me-1"></i>Xem trước
-                </button>
-                <span class="md-tab-spacer"></span>
-                <button type="button" class="md-collapse-btn" id="compose-collapse-btn" title="Thu nhỏ">
-                    <i class="bi bi-arrows-angle-contract"></i>
-                </button>
-            </div>
-
-            <div class="md-pane md-pane-input">
-                <div class="md-toolbar" data-target="id_violation_text_full">
-                    <button type="button" class="md-tb-btn" data-action="undo"      title="Hoàn tác (Ctrl+Z)"><i class="bi bi-arrow-counterclockwise"></i></button>
-                    <button type="button" class="md-tb-btn" data-action="redo"      title="Làm lại (Ctrl+Y)"><i class="bi bi-arrow-clockwise"></i></button>
-                    <span class="md-tb-sep"></span>
-                    <button type="button" class="md-tb-btn" data-action="bold"      title="In đậm (Ctrl+B)"><i class="bi bi-type-bold"></i></button>
-                    <button type="button" class="md-tb-btn" data-action="italic"    title="In nghiêng (Ctrl+I)"><i class="bi bi-type-italic"></i></button>
-                    <button type="button" class="md-tb-btn" data-action="strike"    title="Gạch ngang"><i class="bi bi-type-strikethrough"></i></button>
-                    <span class="md-tb-sep"></span>
-                    <button type="button" class="md-tb-btn" data-action="code"      title="Mã lệnh"><i class="bi bi-code"></i></button>
-                    <button type="button" class="md-tb-btn" data-action="codeblock" title="Khối mã"><i class="bi bi-code-square"></i></button>
-                    <button type="button" class="md-tb-btn" data-action="quote"     title="Trích dẫn"><i class="bi bi-blockquote-left"></i></button>
-                    <span class="md-tb-sep"></span>
-                    <button type="button" class="md-tb-btn" data-action="ul"        title="Danh sách không thứ tự"><i class="bi bi-list-ul"></i></button>
-                    <button type="button" class="md-tb-btn" data-action="ol"        title="Danh sách có thứ tự"><i class="bi bi-list-ol"></i></button>
-                    <span class="md-tb-sep"></span>
-                    <button type="button" class="md-tb-btn" data-action="link"      title="Liên kết (Ctrl+K)"><i class="bi bi-link-45deg"></i></button>
-                    <button type="button" class="md-tb-btn" data-action="image"     title="Chèn ảnh (qua URL)"><i class="bi bi-image"></i></button>
-                    <button type="button" class="md-tb-btn" data-action="upload"    title="Tải ảnh từ thiết bị"><i class="bi bi-cloud-upload"></i></button>
-                    <span class="md-tb-sep"></span>
-                    <button type="button" class="md-tb-btn md-tb-mention" data-action="mention" title="Nhắc SBD (@)"><i class="bi bi-person-fill"></i></button>
-                </div>
-                <div class="mention-textarea-wrap">
-                    <textarea name="violation_text_full" id="id_violation_text_full"
-                              class="form-control md-textarea" rows="6"
-                              placeholder="Nhập nội dung vi phạm…"></textarea>
-                    <div class="mention-dropdown" role="listbox"></div>
-                </div>
-            </div>
-
-            <div class="md-pane md-pane-preview" style="display:none;">
-                <div class="md-preview-content markdown-body" id="md-preview-content"></div>
-                <div class="md-preview-footer">
-                    <button type="button" class="btn btn-sm btn-outline-secondary md-preview-reload" id="md-preview-reload">
-                        <i class="bi bi-arrow-clockwise me-1"></i>Tải lại xem trước
-                    </button>
-                </div>
-            </div>
-        </div>
+        {% include 'violations/_md_editor.html' with editor_id='md-editor-main' textarea_name='violation_text_full' textarea_id='id_violation_text_full' rows=6 show_collapse_btn=1 collapse_btn_id='compose-collapse-btn' preview_id='md-preview-content' reload_btn_id='md-preview-reload' %}
     </div>
 </form>
 {% else %}

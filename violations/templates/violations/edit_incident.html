@@ -31,51 +31,9 @@
                         </select>
                     </div>
 
-                    <div class="col-md-6">
-                        <label class="form-label">Nội dung Vi phạm</label>
-                        <div class="md-editor-wrap mention-textarea-wrap" id="md-editor-main">
-
-                            <div class="md-tab-bar">
-                                <button type="button" class="md-tab-btn active" data-tab="input">
-                                    <i class="bi bi-pencil me-1"></i>Nhập
-                                </button>
-                                <button type="button" class="md-tab-btn" data-tab="preview">
-                                    <i class="bi bi-eye me-1"></i>Xem trước
-                                </button>
-                            </div>
-
-                            <div class="md-pane md-pane-input">
-                                <div class="md-toolbar" data-target="id_violation_text">
-                                    <button type="button" class="md-tb-btn" data-action="undo"      title="Hoàn tác (Ctrl+Z)"><i class="bi bi-arrow-counterclockwise"></i></button>
-                                    <button type="button" class="md-tb-btn" data-action="redo"      title="Làm lại (Ctrl+Y)"><i class="bi bi-arrow-clockwise"></i></button>
-                                    <span class="md-tb-sep"></span>
-                                    <button type="button" class="md-tb-btn" data-action="bold"      title="In đậm"><i class="bi bi-type-bold"></i></button>
-                                    <button type="button" class="md-tb-btn" data-action="italic"    title="In nghiêng"><i class="bi bi-type-italic"></i></button>
-                                    <button type="button" class="md-tb-btn" data-action="strike"    title="Gạch ngang"><i class="bi bi-type-strikethrough"></i></button>
-                                    <span class="md-tb-sep"></span>
-                                    <button type="button" class="md-tb-btn" data-action="code"      title="Mã lệnh"><i class="bi bi-code"></i></button>
-                                    <button type="button" class="md-tb-btn" data-action="codeblock" title="Khối mã"><i class="bi bi-code-square"></i></button>
-                                    <button type="button" class="md-tb-btn" data-action="quote"     title="Trích dẫn"><i class="bi bi-blockquote-left"></i></button>
-                                    <span class="md-tb-sep"></span>
-                                    <button type="button" class="md-tb-btn" data-action="ul"        title="Danh sách không thứ tự"><i class="bi bi-list-ul"></i></button>
-                                    <button type="button" class="md-tb-btn" data-action="ol"        title="Danh sách có thứ tự"><i class="bi bi-list-ol"></i></button>
-                                    <span class="md-tb-sep"></span>
-                                    <button type="button" class="md-tb-btn" data-action="link"      title="Liên kết"><i class="bi bi-link-45deg"></i></button>
-                                    <button type="button" class="md-tb-btn" data-action="image"     title="Chèn ảnh (qua URL)"><i class="bi bi-image"></i></button>
-                                    <button type="button" class="md-tb-btn" data-action="upload"    title="Tải ảnh từ thiết bị"><i class="bi bi-cloud-upload"></i></button>
-                                    <span class="md-tb-sep"></span>
-                                    <button type="button" class="md-tb-btn md-tb-mention" data-action="mention" title="Nhắc SBD (@)"><i class="bi bi-person-fill"></i></button>
-                                </div>
-                                <textarea name="violation_text" id="id_violation_text"
-                                          class="form-control md-textarea" rows="6"
-                                          required>{{ form.violation_text.value|default:'' }}</textarea>
-                                <div class="mention-dropdown" role="listbox"></div>
-                            </div>
-
-                            <div class="md-pane md-pane-preview" style="display:none;">
-                                <div class="md-preview-content markdown-body"></div>
-                            </div>
-                        </div>
+                    <div class="col-12">
+                        <label for="id_violation_text" class="form-label">Nội dung Vi phạm</label>
+                        {% include 'violations/_md_editor.html' with editor_id='md-editor-main' textarea_name='violation_text' textarea_id='id_violation_text' rows=6 value=form.violation_text.value required=1 %}
                     </div>
 
                     <div class="col-md-8">
