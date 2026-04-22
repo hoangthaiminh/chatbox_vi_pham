@@ -1,0 +1,77 @@
+{% comment %}
+Shared Markdown editor. Used by both the dashboard chatbox composer and the
+standalone edit-incident page. Keeps the two screens visually consistent so
+future UI tweaks only need to happen in one place.
+
+Parameters (all optional except textarea_name and textarea_id):
+  textarea_name     form field name for the textarea (e.g. "violation_text")
+  textarea_id       DOM id of the textarea (also wired to the toolbar via
+                    data-target) — e.g. "id_violation_text"
+  editor_id         id attribute of the outer .md-editor-wrap (default: none)
+  rows              textarea rows (default 6)
+  value             initial textarea value
+  required          truthy → emit required attribute
+  placeholder       textarea placeholder (default "Nhập nội dung vi phạm…")
+  show_collapse_btn truthy → render the "thu nhỏ" button used only in the
+                    dashboard composer to switch back to the plain input
+  collapse_btn_id   id for the collapse button (default "compose-collapse-btn")
+  preview_id        id for the inner preview container (optional)
+  reload_btn_id     id for the "reload preview" button (optional)
+{% endcomment %}
+<div class="md-editor-wrap"{% if editor_id %} id="{{ editor_id }}"{% endif %}>
+
+    <div class="md-tab-bar">
+        <button type="button" class="md-tab-btn active" data-tab="input">
+            <i class="bi bi-pencil me-1"></i>Nhập
+        </button>
+        <button type="button" class="md-tab-btn" data-tab="preview">
+            <i class="bi bi-eye me-1"></i>Xem trước
+        </button>
+        {% if show_collapse_btn %}
+        <span class="md-tab-spacer"></span>
+        <button type="button" class="md-collapse-btn" id="{{ collapse_btn_id|default:'compose-collapse-btn' }}" title="Thu nhỏ">
+            <i class="bi bi-arrows-angle-contract"></i>
+        </button>
+        {% endif %}
+    </div>
+
+    <div class="md-pane md-pane-input">
+        <div class="md-toolbar" data-target="{{ textarea_id }}">
+            <button type="button" class="md-tb-btn" data-action="undo"      title="Hoàn tác (Ctrl+Z)"><i class="bi bi-arrow-counterclockwise"></i></button>
+            <button type="button" class="md-tb-btn" data-action="redo"      title="Làm lại (Ctrl+Y)"><i class="bi bi-arrow-clockwise"></i></button>
+            <span class="md-tb-sep"></span>
+            <button type="button" class="md-tb-btn" data-action="bold"      title="In đậm (Ctrl+B)"><i class="bi bi-type-bold"></i></button>
+            <button type="button" class="md-tb-btn" data-action="italic"    title="In nghiêng (Ctrl+I)"><i class="bi bi-type-italic"></i></button>
+            <button type="button" class="md-tb-btn" data-action="strike"    title="Gạch ngang"><i class="bi bi-type-strikethrough"></i></button>
+            <span class="md-tb-sep"></span>
+            <button type="button" class="md-tb-btn" data-action="code"      title="Mã lệnh"><i class="bi bi-code"></i></button>
+            <button type="button" class="md-tb-btn" data-action="codeblock" title="Khối mã"><i class="bi bi-code-square"></i></button>
+            <button type="button" class="md-tb-btn" data-action="quote"     title="Trích dẫn"><i class="bi bi-blockquote-left"></i></button>
+            <span class="md-tb-sep"></span>
+            <button type="button" class="md-tb-btn" data-action="ul"        title="Danh sách không thứ tự"><i class="bi bi-list-ul"></i></button>
+            <button type="button" class="md-tb-btn" data-action="ol"        title="Danh sách có thứ tự"><i class="bi bi-list-ol"></i></button>
+            <span class="md-tb-sep"></span>
+            <button type="button" class="md-tb-btn" data-action="link"      title="Liên kết (Ctrl+K)"><i class="bi bi-link-45deg"></i></button>
+            <button type="button" class="md-tb-btn" data-action="image"     title="Chèn ảnh (qua URL)"><i class="bi bi-image"></i></button>
+            <button type="button" class="md-tb-btn" data-action="upload"    title="Tải ảnh từ thiết bị"><i class="bi bi-cloud-upload"></i></button>
+            <span class="md-tb-sep"></span>
+            <button type="button" class="md-tb-btn md-tb-mention" data-action="mention" title="Nhắc SBD (@)"><i class="bi bi-person-fill"></i></button>
+        </div>
+        <div class="mention-textarea-wrap">
+            <textarea name="{{ textarea_name }}" id="{{ textarea_id }}"
+                      class="form-control md-textarea" rows="{{ rows|default:6 }}"
+                      placeholder="{{ placeholder|default:'Nhập nội dung vi phạm…' }}"
+                      {% if required %}required{% endif %}>{{ value|default:'' }}</textarea>
+            <div class="mention-dropdown" role="listbox"></div>
+        </div>
+    </div>
+
+    <div class="md-pane md-pane-preview" style="display:none;">
+        <div class="md-preview-content markdown-body"{% if preview_id %} id="{{ preview_id }}"{% endif %}></div>
+        <div class="md-preview-footer">
+            <button type="button" class="btn btn-sm btn-outline-secondary md-preview-reload"{% if reload_btn_id %} id="{{ reload_btn_id }}"{% endif %}>
+                <i class="bi bi-arrow-clockwise me-1"></i>Tải lại xem trước
+            </button>
+        </div>
+    </div>
+</div>

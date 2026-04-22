@@ -958,7 +958,12 @@
             if (!simpleInput || !fullTextarea || !isMarkdownField || !expandedWrap) return;
 
             if (expanded) {
-                if (simpleInput.value && !fullTextarea.value) {
+                // Switching simple -> markdown: carry whatever the user has
+                // already typed into the markdown textarea so the draft is not
+                // lost. We overwrite any stale content in the markdown field
+                // because the simple input was the one the user was just
+                // editing and is therefore the authoritative draft.
+                if (simpleInput.value) {
                     fullTextarea.value = simpleInput.value;
                 }
                 form.dataset.mode = "expanded";
@@ -971,6 +976,12 @@
                 simpleInput.removeAttribute("required");
                 fullTextarea.focus();
             } else {
+                // Switching markdown -> simple: mirror the markdown draft back
+                // into the simple input so the user does not lose what they
+                // have typed when collapsing the editor.
+                if (fullTextarea.value) {
+                    simpleInput.value = fullTextarea.value;
+                }
                 form.dataset.mode = "simple";
                 form.classList.remove("is-expanded");
                 expandedWrap.hidden = true;
