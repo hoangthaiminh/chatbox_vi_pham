@@ -6,7 +6,8 @@ services:
       - db_data:/app/db_volume
     environment:
       - DJANGO_DEBUG=0
-      - DJANGO_ALLOWED_HOSTS=*
+      - DJANGO_ALLOWED_HOSTS=chat.thptchuyenhatinh.edu.vn,localhost,127.0.0.1
+      - DJANGO_CSRF_TRUSTED_ORIGINS=https://chat.thptchuyenhatinh.edu.vn
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-django-insecure-prod-key-please-change-me}
       - DATABASE_PATH=db_volume/db.sqlite3
     ports:

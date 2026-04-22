@@ -6,6 +6,8 @@ Production deployment note (PythonAnywhere or any host):
         DJANGO_SECRET_KEY    — REQUIRED in production
         DJANGO_DEBUG         — "0" or "1" (default 0 in production)
         DJANGO_ALLOWED_HOSTS — comma-separated, e.g. "exam.example.com"
+        DJANGO_CSRF_TRUSTED_ORIGINS — comma-separated full origins,
+                                       e.g. "https://exam.example.com"
 
 If DJANGO_SECRET_KEY is not set the dev fallback below is used; this is
 only safe for local development.
@@ -39,10 +41,18 @@ if DEBUG and not ALLOWED_HOSTS:
 
 # CSRF: when behind HTTPS in production, the host(s) must be listed below
 # to ensure cross-origin POSTs are accepted from the right origins.
-CSRF_TRUSTED_ORIGINS = [
-    f"https://{h}" for h in ALLOWED_HOSTS
-    if h not in ("localhost", "127.0.0.1", "0.0.0.0", "[::1]")
-]
+_csrf_env = os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").strip()
+if _csrf_env:
+    CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf_env.split(",") if o.strip()]
+else:
+    _trusted_hosts = []
+    for h in ALLOWED_HOSTS:
+        if h in ("localhost", "127.0.0.1", "0.0.0.0", "[::1]", "*"):
+            continue
+        # Django accepts wildcard subdomains in origin form like https://*.example.com
+        origin_host = f"*{h}" if h.startswith(".") else h
+        _trusted_hosts.append(origin_host)
+    CSRF_TRUSTED_ORIGINS = [f"https://{h}" for h in _trusted_hosts]
 
 # Production-grade cookie + transport hardening. These flags become active
 # only when DEBUG is off so local development over plain HTTP keeps working.
