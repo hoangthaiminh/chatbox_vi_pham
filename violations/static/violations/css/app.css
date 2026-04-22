@@ -586,10 +586,12 @@ body {
 
 .md-pane-preview {
     min-height: 80px;
-    max-height: 420px;
-    overflow-y: auto;
     padding: 0.75rem 1rem;
     background: #fff;
+    /* The inner .md-preview-content owns the single vertical scrollbar.
+       Keeping overflow hidden here avoids a second scrollbar that used to
+       appear when the content + reload button exceeded the pane's height. */
+    overflow: hidden;
 }
 
 .md-preview-content {
@@ -960,6 +962,11 @@ body {
     min-height: 6rem;
     max-height: 50vh;
     overflow-y: auto;
+    /* Prevent a horizontal scrollbar on the preview itself when the rendered
+       markdown contains long unbroken words, URLs, or wide inline content. */
+    overflow-x: hidden;
+    overflow-wrap: anywhere;
+    word-break: break-word;
     padding: 0.75rem;
     background: #fff;
     border: 1px solid rgba(0, 0, 0, 0.06);
