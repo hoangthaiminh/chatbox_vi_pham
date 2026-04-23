@@ -34,3 +34,11 @@ Thumbs.db
 # others
 /static/
 /staticfiles/
+
+# Other code workspaces
+.claude/
+.cache/
+.user_references/
+cache/
+management_configs/
+worktrees/
