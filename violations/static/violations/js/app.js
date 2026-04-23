@@ -13,6 +13,7 @@
     const detailContent = document.getElementById("candidate-detail-content");
     const detailCanvasEl = document.getElementById("candidateDetailCanvas");
     const detailCanvas = detailCanvasEl ? new bootstrap.Offcanvas(detailCanvasEl) : null;
+    const is_chatbox_page = Boolean(document.getElementById("chatbox-page-indicator"));
 
     let liveSocket = null;
     let reconnectDelayMs = 1000;
@@ -70,7 +71,12 @@
         const setInvalid = (msg) => {
             inputEl.classList.add('is-invalid');
             inputEl.classList.remove('is-valid');
+            if (feedback && is_chatbox_page) {
+                feedback.textContent = '';
+                return;
+            }
             if (feedback) feedback.textContent = msg || 'SBD không hợp lệ.';
+            return;
         };
         const setValid = () => {
             inputEl.classList.remove('is-invalid');
