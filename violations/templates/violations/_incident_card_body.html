@@ -40,17 +40,25 @@
 <div class="chat-text markdown-body">{{ incident.violation_text|render_violation:incident.is_markdown }}</div>
 
 {# Divider between message body and footer (mentions / evidence / actions) #}
-{% with mentions=incident.participants.all %}
-    {% if mentions or incident.evidence %}
-        <div class="chat-divider mt-2 mb-2" aria-hidden="true"></div>
-    {% else %}
-        {% if mode == "full" %}
-            {% if editable and incident.id in editable_incident_ids or can_delete_incidents %}
-                <div class="chat-divider mt-2 mb-2" aria-hidden="true"></div>
+{# Avoid touching the related manager on unsaved preview instances. #}
+{% if mode != "preview" %}
+    {% with mentions=incident.participants.all %}
+        {% if mentions or incident.evidence %}
+            <div class="chat-divider mt-2 mb-2" aria-hidden="true"></div>
+        {% else %}
+            {% if mode == "full" %}
+                {% if editable and incident.id in editable_incident_ids or can_delete_incidents %}
+                    <div class="chat-divider mt-2 mb-2" aria-hidden="true"></div>
+                {% endif %}
             {% endif %}
         {% endif %}
+    {% endwith %}
+{% else %}
+    {# Preview: only show divider if there's evidence (participants unavailable). #}
+    {% if incident.evidence %}
+        <div class="chat-divider mt-2 mb-2" aria-hidden="true"></div>
     {% endif %}
-{% endwith %}
+{% endif %}
 
 {% if mode == "full" %}
     {% with mentions=incident.participants.all %}

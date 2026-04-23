@@ -21,6 +21,11 @@
     let sendingComposer = false;
     let setComposeExpanded = null;
     let refreshComposeEvidenceIndicator = null;
+    // When true, allow navigation without showing the native beforeunload prompt
+    let __allowUnload = false;
+    // refs to SBD validators (filled during init)
+    let composeSbdValidate = null;
+    let editSbdValidate = null;
 
     const PREVIEW_URL = "/incidents/preview/";
     const UPLOAD_URL = "/incidents/upload-image/";
@@ -51,6 +56,54 @@
         if (bytes < 1024) return `${bytes} B`;
         if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
         return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    // Client-side SBD syntax check (matches server's is_valid_sbd_syntax)
+    const SBD_SYNTAX_RE = /^[A-Za-z0-9]{1,9}$/;
+    function isValidSbdSyntax(value) {
+        return SBD_SYNTAX_RE.test(String(value || "").trim());
+    }
+
+    function attachSbdValidation(inputEl) {
+        if (!inputEl) return;
+        const feedback = document.getElementById('sbd-error');
+        const setInvalid = (msg) => {
+            inputEl.classList.add('is-invalid');
+            inputEl.classList.remove('is-valid');
+            if (feedback) feedback.textContent = msg || 'SBD không hợp lệ.';
+        };
+        const setValid = () => {
+            inputEl.classList.remove('is-invalid');
+            inputEl.classList.add('is-valid');
+            if (feedback) feedback.textContent = '';
+        };
+
+        function validate() {
+            const v = (inputEl.value || '').trim();
+            if (!v) {
+                setInvalid('SBD không được để trống.');
+                return false;
+            }
+            if (!isValidSbdSyntax(v)) {
+                setInvalid('SBD phải từ 1 đến 9 ký tự, chỉ gồm chữ cái và chữ số.');
+                return false;
+            }
+            setValid();
+            return true;
+        }
+
+        inputEl.addEventListener('input', () => {
+            // live validate but don't be aggressive
+            if (inputEl.value === '') {
+                inputEl.classList.remove('is-valid', 'is-invalid');
+                if (feedback) feedback.textContent = '';
+                return;
+            }
+            validate();
+        });
+
+        // return validator for use on submit
+        return validate;
     }
 
     function getCsrfToken() {
@@ -498,6 +551,14 @@
         event.preventDefault();
         if (!composerForm || sendingComposer) return;
 
+        // client-side SBD validation
+        if (typeof composeSbdValidate === 'function') {
+            if (!composeSbdValidate()) {
+                showToast('SBD không hợp lệ.', 'danger');
+                return;
+            }
+        }
+
         sendingComposer = true;
         setComposerSubmittingState(true);
         updateTopStatus("");
@@ -917,23 +978,31 @@
         const form = document.getElementById("create-incident-form");
         if (!form) return;
 
+        // attach SBD validator for composer
+        const sbdInput = document.getElementById("id_sbd");
+        composeSbdValidate = attachSbdValidation(sbdInput);
+
         const simpleInput = document.getElementById("id_violation_text_simple");
         const fullTextarea = document.getElementById("id_violation_text_full");
         const isMarkdownField = document.getElementById("id_is_markdown");
         const expandBtn = document.getElementById("compose-expand-btn");
         const collapseBtn = document.getElementById("compose-collapse-btn");
         const expandedWrap = document.getElementById("compose-expanded");
-        const evidenceInput = document.getElementById("id_evidence");
         const evidenceLabel = form.querySelector(".compose-video");
         const evidenceName = document.getElementById("video-filename");
 
+        const getEvidenceInput = () => form.querySelector('input[type="file"][name="evidence"]');
+
         const updateEvidenceIndicator = () => {
-            if (!evidenceInput || !evidenceLabel || !evidenceName) return;
-            const file = evidenceInput.files && evidenceInput.files[0];
+            const cur = getEvidenceInput();
+            if (!cur || !evidenceLabel || !evidenceName) return;
+            const file = cur.files && cur.files[0];
             if (!file) {
                 evidenceLabel.classList.remove("has-file");
                 evidenceName.textContent = "";
                 evidenceName.title = "";
+                const clear = evidenceLabel.querySelector('.compose-video-clear');
+                if (clear) clear.style.display = 'none';
                 return;
             }
 
@@ -943,12 +1012,50 @@
             evidenceLabel.classList.add("has-file");
             evidenceName.textContent = info;
             evidenceName.title = info;
+            const clear = evidenceLabel.querySelector('.compose-video-clear');
+            if (clear) clear.style.display = '';
         };
 
         refreshComposeEvidenceIndicator = updateEvidenceIndicator;
-        if (evidenceInput) {
-            evidenceInput.addEventListener("change", () => {
-                if (!validateEvidenceInput(evidenceInput)) {
+
+        // add a clear (trash) button to allow removing a selected file
+        if (evidenceLabel) {
+            const clearBtn = document.createElement('button');
+            clearBtn.type = 'button';
+            clearBtn.className = 'btn btn-link btn-sm compose-video-clear';
+            clearBtn.title = 'Huỷ đính kèm';
+            clearBtn.style.display = 'none';
+            clearBtn.innerHTML = '<i class="bi bi-trash" style="color:rgb(255,0,0)"></i>';
+            evidenceLabel.appendChild(clearBtn);
+            clearBtn.addEventListener('click', (ev) => {
+                ev.preventDefault();
+                const oldInput = getEvidenceInput();
+                if (oldInput) {
+                    try {
+                        const newInput = oldInput.cloneNode(true);
+                        newInput.value = '';
+                        oldInput.parentNode.replaceChild(newInput, oldInput);
+                        newInput.addEventListener('change', () => {
+                            if (!validateEvidenceInput(newInput)) {
+                                updateEvidenceIndicator();
+                                return;
+                            }
+                            updateEvidenceIndicator();
+                        });
+                    } catch (_) {
+                        oldInput.value = '';
+                    }
+                }
+                updateEvidenceIndicator();
+            });
+        }
+
+        const initialInput = getEvidenceInput();
+        if (initialInput) {
+            initialInput.addEventListener("change", () => {
+                const curEl = getEvidenceInput();
+                if (!curEl) return;
+                if (!validateEvidenceInput(curEl)) {
                     updateEvidenceIndicator();
                     return;
                 }
@@ -956,6 +1063,39 @@
             });
             updateEvidenceIndicator();
         }
+
+        // --- Unsaved-changes detection for composer (smart compare) ---------
+        const getComposerText = () => {
+            if (!simpleInput && !fullTextarea) return "";
+            const mode = form.dataset.mode || (fullTextarea && fullTextarea.value ? "expanded" : "simple");
+            if (mode === "expanded") return (fullTextarea && fullTextarea.value) ? fullTextarea.value : "";
+            return (simpleInput && simpleInput.value) ? simpleInput.value : "";
+        };
+
+        const initialComposeMode = form.dataset.mode || "simple";
+        const initialComposeText = (getComposerText() || "").trim();
+        const initialEvidenceHasFile = (getEvidenceInput() && getEvidenceInput().files && getEvidenceInput().files.length > 0) || false;
+
+        function isComposerDirty() {
+            const curText = (getComposerText() || "").trim();
+            const curEvidenceHasFile = (getEvidenceInput() && getEvidenceInput().files && getEvidenceInput().files.length > 0) || false;
+            if (curText !== initialComposeText) return true;
+            if (Boolean(curEvidenceHasFile) !== Boolean(initialEvidenceHasFile)) return true;
+            // No meaningful changes
+            return false;
+        }
+
+        form.addEventListener("submit", () => { /* on submit we consider changes saved */ __allowUnload = true; });
+
+        window.addEventListener("beforeunload", (ev) => {
+            if (__allowUnload) return undefined;
+            if (isComposerDirty()) {
+                ev.preventDefault();
+                ev.returnValue = "Có thay đổi chưa lưu, bạn có chắc chắn muốn rời đi?";
+                return ev.returnValue;
+            }
+            return undefined;
+        });
 
         const setExpanded = (expanded) => {
             if (!simpleInput || !fullTextarea || !isMarkdownField || !expandedWrap) return;
@@ -1018,6 +1158,23 @@
     function initEditIncidentPage() {
         const form = document.getElementById("edit-incident-form");
         if (!form) return;
+
+        // attach SBD validator for edit page
+        const sbdInput = form.querySelector('input[name="sbd"]');
+        editSbdValidate = attachSbdValidation(sbdInput);
+
+        // Prevent form submit if SBD invalid
+        form.addEventListener('submit', (ev) => {
+            if (typeof editSbdValidate === 'function') {
+                if (!editSbdValidate()) {
+                    ev.preventDefault();
+                    // focus the invalid field
+                    if (sbdInput) sbdInput.focus();
+                    return false;
+                }
+            }
+            return true;
+        });
         bindMarkdownEditorsIn(form);
 
         const evidenceInput = form.querySelector('input[type="file"][name="evidence"]');
@@ -1026,6 +1183,78 @@
                 validateEvidenceInput(evidenceInput);
             });
         }
+        // --- Unsaved-changes detection for edit page (smart compare) ---------
+        (function attachEditUnsavedHandler() {
+            const sbdInput = form.querySelector('input[name="sbd"]');
+            const kindInput = form.querySelector('select[name="incident_kind"]');
+            const fullTextarea = form.querySelector('textarea[name="violation_text"]') || form.querySelector('textarea[id="id_violation_text"]');
+            const removeEvidence = form.querySelector('input[name="remove_evidence"]');
+            const fileInput = form.querySelector('input[type="file"][name="evidence"]');
+
+            const initial = {
+                sbd: sbdInput ? (sbdInput.value || "") : "",
+                kind: kindInput ? (kindInput.value || "") : "",
+                violation: fullTextarea ? (fullTextarea.value || "") : "",
+                removeEvidence: removeEvidence ? Boolean(removeEvidence.checked) : false,
+                fileSelected: fileInput && fileInput.files && fileInput.files.length > 0,
+            };
+
+            function isEditDirty() {
+                const cur = {
+                    sbd: sbdInput ? (sbdInput.value || "") : "",
+                    kind: kindInput ? (kindInput.value || "") : "",
+                    violation: fullTextarea ? (fullTextarea.value || "") : "",
+                    removeEvidence: removeEvidence ? Boolean(removeEvidence.checked) : false,
+                    fileSelected: fileInput && fileInput.files && fileInput.files.length > 0,
+                };
+                if ((cur.sbd || "").trim() !== (initial.sbd || "").trim()) return true;
+                if ((cur.kind || "") !== (initial.kind || "")) return true;
+                if ((cur.violation || "").trim() !== (initial.violation || "").trim()) return true;
+                if (Boolean(cur.removeEvidence) !== Boolean(initial.removeEvidence)) return true;
+                if (Boolean(cur.fileSelected) !== Boolean(initial.fileSelected)) return true;
+                return false;
+            }
+
+            // Clear on save -> allow unload
+            form.addEventListener('submit', () => { __allowUnload = true; });
+
+            // Intercept cancel/back link on the page
+            document.querySelectorAll('a').forEach((a) => {
+                if (!a.href) return;
+                try {
+                    const url = new URL(a.href, window.location.href);
+                    if (url.origin !== window.location.origin) return;
+                } catch (_) { return; }
+                a.addEventListener('click', (ev) => {
+                    if (!isEditDirty()) return;
+                    if (a.hash && a.pathname === window.location.pathname) return;
+                    ev.preventDefault();
+                    showConfirmDialog({
+                        title: 'Rời trang?',
+                        message: 'Bạn có thay đổi chưa lưu. Rời đi sẽ bỏ các thay đổi này.',
+                        okText: 'Rời đi',
+                        cancelText: 'Ở lại',
+                        variant: 'dark',
+                    }).then((ok) => {
+                        if (ok) {
+                            __allowUnload = true;
+                            window.location.href = a.href;
+                        }
+                    });
+                });
+            });
+
+            // beforeunload
+            window.addEventListener('beforeunload', (ev) => {
+                if (__allowUnload) return undefined;
+                if (isEditDirty()) {
+                    ev.preventDefault();
+                    ev.returnValue = 'Bạn có thay đổi chưa lưu. Rời trang sẽ bỏ các thay đổi.';
+                    return ev.returnValue;
+                }
+                return undefined;
+            });
+        })();
     }
 
     document.addEventListener("click", (event) => {
@@ -1147,6 +1376,17 @@
         let activeTooltip = null;
         let hoverTimer = null;
 
+        function clearTooltip() {
+            if (hoverTimer) {
+                clearTimeout(hoverTimer);
+                hoverTimer = null;
+            }
+            if (activeTooltip) {
+                try { activeTooltip.remove(); } catch (_) {}
+                activeTooltip = null;
+            }
+        }
+
         function onEnter(e) {
             const btn = e.currentTarget;
             const sbd = btn.dataset.sbd;
@@ -1165,11 +1405,7 @@
         }
 
         function onLeave() {
-            clearTimeout(hoverTimer);
-            if (activeTooltip) {
-                activeTooltip.remove();
-                activeTooltip = null;
-            }
+            clearTooltip();
         }
 
         root.querySelectorAll(".js-open-candidate-detail").forEach((el) => {
@@ -1181,6 +1417,15 @@
             el.addEventListener("mouseleave", onLeave);
             el.addEventListener("blur", onLeave);
         });
+
+        // Global cleanup hooks: user might open a modal, navigate, or the
+        // element may be removed without a mouseleave firing. Clear tooltip
+        // on these global interactions to avoid it getting stuck.
+        document.addEventListener('pointerdown', clearTooltip, { passive: true });
+        document.addEventListener('scroll', clearTooltip, { passive: true });
+        document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') clearTooltip(); });
+        document.addEventListener('visibilitychange', () => { if (document.hidden) clearTooltip(); });
+        window.addEventListener('pagehide', clearTooltip);
     }
 
     bindEvidenceGuards(document);
