@@ -401,6 +401,7 @@
         bindEvidenceGuards(incidentListContainer);
         nodes.forEach((node) => bindEvidencePlaceholders(node));
         nodes.forEach((node) => bindLightGallery(node));
+        nodes.forEach((node) => bindSbdHoverTooltips(node));
         nodes.forEach((node) => formatLocalTimestamps(node));
 
         const heightDelta = document.documentElement.scrollHeight - previousHeight;
@@ -419,6 +420,7 @@
         bindEvidenceGuards(incidentListContainer);
         nodes.forEach((node) => bindEvidencePlaceholders(node));
         nodes.forEach((node) => bindLightGallery(node));
+        nodes.forEach((node) => bindSbdHoverTooltips(node));
         nodes.forEach((node) => formatLocalTimestamps(node));
         recomputeIncidentBounds();
         return nodes.length;
@@ -648,6 +650,7 @@
             bindEvidenceGuards(detailContent);
             bindEvidencePlaceholders(detailContent);
             bindLightGallery(detailContent);
+            bindSbdHoverTooltips(detailContent);
             formatLocalTimestamps(detailContent);
         } catch (_) {
             detailContent.innerHTML = '<div class="alert alert-danger">Không thể tải chi tiết thí sinh.</div>';
@@ -812,9 +815,9 @@
         link: (ta) => insertMarkdown(ta, { before: "[", after: "](url)", placeholder: "văn bản liên kết" }),
         image: (ta) => insertMarkdown(ta, { before: "![", after: "](url)", placeholder: "mô tả ảnh" }),
         mention: (ta) => insertMarkdown(ta, {
-            placeholder: "TS0000",
+            placeholder: "TS",
             selectOffset: 2,
-            selectLength: 4,
+            selectLength: 0,
         }),
         undo: (ta) => { ta.focus(); document.execCommand("undo"); },
         redo: (ta) => { ta.focus(); document.execCommand("redo"); },
@@ -1050,9 +1053,140 @@
         });
     });
 
+    // --- SBD hover tooltip support -------------------------------------------------
+    const _sbdNameCache = new Map();
+
+    async function fetchCandidateName(sbd) {
+        if (!sbd) return sbd;
+        const key = sbd.toUpperCase();
+        if (_sbdNameCache.has(key)) return _sbdNameCache.get(key);
+        try {
+            const res = await fetch(`/stats/candidate/${encodeURIComponent(sbd)}/`, {
+                headers: { "X-Requested-With": "XMLHttpRequest" },
+            });
+            if (!res.ok) {
+                _sbdNameCache.set(key, sbd);
+                return sbd;
+            }
+            const html = await res.text();
+            const wrapper = document.createElement("div");
+            wrapper.innerHTML = html;
+            const nameEl = wrapper.querySelector(".detail-value-name");
+            const name = nameEl ? nameEl.textContent.trim() : sbd;
+            _sbdNameCache.set(key, name || sbd);
+            return _sbdNameCache.get(key);
+        } catch (_) {
+            _sbdNameCache.set(key, sbd);
+            return sbd;
+        }
+    }
+
+    function createTooltip(text) {
+        const el = document.createElement("div");
+        el.className = "sbd-tooltip";
+        el.setAttribute("role", "tooltip");
+        el.textContent = text;
+        document.body.appendChild(el);
+        return el;
+    }
+
+    function placeTooltipWithinViewport(tooltipEl, targetRect) {
+        const margin = 8;
+        const pad = 6;
+        const tw = tooltipEl.offsetWidth;
+        const th = tooltipEl.offsetHeight;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+
+        // Try positions in preference order: top, bottom, left, right
+        const candidates = [];
+        // top
+        candidates.push({
+            left: Math.min(Math.max(targetRect.left + (targetRect.width - tw) / 2, pad), vw - tw - pad),
+            top: targetRect.top - th - margin,
+            placement: "top",
+        });
+        // bottom
+        candidates.push({
+            left: Math.min(Math.max(targetRect.left + (targetRect.width - tw) / 2, pad), vw - tw - pad),
+            top: targetRect.bottom + margin,
+            placement: "bottom",
+        });
+        // left
+        candidates.push({
+            left: targetRect.left - tw - margin,
+            top: Math.min(Math.max(targetRect.top + (targetRect.height - th) / 2, pad), vh - th - pad),
+            placement: "left",
+        });
+        // right
+        candidates.push({
+            left: targetRect.right + margin,
+            top: Math.min(Math.max(targetRect.top + (targetRect.height - th) / 2, pad), vh - th - pad),
+            placement: "right",
+        });
+
+        for (const c of candidates) {
+            const fitsHoriz = c.left >= 0 && (c.left + tw) <= vw;
+            const fitsVert = c.top >= 0 && (c.top + th) <= vh;
+            if (fitsHoriz && fitsVert) {
+                tooltipEl.style.left = `${Math.round(c.left)}px`;
+                tooltipEl.style.top = `${Math.round(c.top)}px`;
+                tooltipEl.setAttribute("data-placement", c.placement);
+                return;
+            }
+        }
+
+        // Fallback: clamp to viewport
+        tooltipEl.style.left = `${Math.min(Math.max( (targetRect.left + targetRect.right) / 2 - tw / 2, pad), vw - tw - pad)}px`;
+        tooltipEl.style.top = `${Math.min(Math.max(targetRect.top - th - margin, pad), vh - th - pad)}px`;
+        tooltipEl.setAttribute("data-placement", "top");
+    }
+
+    function bindSbdHoverTooltips(scope) {
+        const root = scope || document;
+        let activeTooltip = null;
+        let hoverTimer = null;
+
+        function onEnter(e) {
+            const btn = e.currentTarget;
+            const sbd = btn.dataset.sbd;
+            if (!sbd) return;
+            clearTimeout(hoverTimer);
+            hoverTimer = setTimeout(async () => {
+                const name = await fetchCandidateName(sbd);
+                if (!name) return;
+                if (activeTooltip) activeTooltip.remove();
+                activeTooltip = createTooltip(name);
+                // measure then place
+                requestAnimationFrame(() => {
+                    placeTooltipWithinViewport(activeTooltip, btn.getBoundingClientRect());
+                });
+            }, 220);
+        }
+
+        function onLeave() {
+            clearTimeout(hoverTimer);
+            if (activeTooltip) {
+                activeTooltip.remove();
+                activeTooltip = null;
+            }
+        }
+
+        root.querySelectorAll(".js-open-candidate-detail").forEach((el) => {
+            el.removeEventListener("mouseenter", el._sbdTooltipEnter || (()=>{}));
+            el.removeEventListener("mouseleave", el._sbdTooltipLeave || (()=>{}));
+            el._sbdTooltipEnter = onEnter;
+            el._sbdTooltipLeave = onLeave;
+            el.addEventListener("mouseenter", onEnter);
+            el.addEventListener("mouseleave", onLeave);
+            el.addEventListener("blur", onLeave);
+        });
+    }
+
     bindEvidenceGuards(document);
     bindEvidencePlaceholders(document);
     bindLightGallery(document);
+    bindSbdHoverTooltips(document);
     formatLocalTimestamps(document);
     initComposeBar();
     initEditIncidentPage();

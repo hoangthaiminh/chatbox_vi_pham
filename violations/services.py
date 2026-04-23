@@ -11,7 +11,9 @@ MAX_SBD_LENGTH = 9
 MAX_VIOLATION_TEXT_LEN = 2000
 
 _SBD_SYNTAX_RE = re.compile(rf"^[A-Za-z0-9]{{1,{MAX_SBD_LENGTH}}}$")
-SBD_PATTERN = re.compile(r"\b[Tt][Ss]\d{4}\b")
+# Match TS + 1..N digits up to the max allowed SBD length (reserving 2 chars for 'TS')
+digits_max = max(1, MAX_SBD_LENGTH - 2)
+SBD_PATTERN = re.compile(rf"\b[Tt][Ss]\d{{1,{digits_max}}}\b")
 SBD_TEXT_PATTERN = SBD_PATTERN
 # Kept for backwards compatibility with older call-sites.
 MENTION_TOKEN_PATTERN = re.compile(r"@\{([A-Za-z0-9]{1,9})\}")

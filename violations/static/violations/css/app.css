@@ -102,6 +102,7 @@ body {
 .chat-text { word-break: break-word; }
 
 .chat-text.markdown-body {
+    margin-top: 0.5rem;
     line-height: 1.65;
 }
 .chat-text.markdown-body > *:last-child { margin-bottom: 0; }
@@ -161,6 +162,15 @@ body {
 .chat-text.markdown-body th { background: #f1f5f3; font-weight: 600; }
 .chat-text.markdown-body hr { border: none; border-top: 1px solid rgba(0,0,0,0.12); margin: 0.5rem 0; }
 
+/* Horizontal divider between message body and footer */
+.chat-divider {
+    height: 2px;
+    background: linear-gradient(90deg, rgba(0,0,0,0.06), rgba(0,0,0,0.02));
+    border-radius: 2px;
+}
+.chat-divider.mt-2 { margin-top: 1rem !important; }
+.chat-divider.mb-2 { margin-bottom: 0.5rem !important; }
+
 .mention-link {
     color: #1a6fa8;
     font-weight: 700;
@@ -192,21 +202,53 @@ body {
 }
 
 .mention-chip {
-    background: transparent;
-    border: 0;
-    padding: 0;
-    margin: 0;
+    display: inline-block;
+    background: #fbe779; /* soft yellow highlight */
+    color: #2f2a00;
+    border: none;
+    border-radius: 0.45rem; /* rounded like GitHub mentions */
+    padding: 0 0.35rem;
+    margin: 0 0.05rem;
     line-height: inherit;
-    font: inherit;
-    text-decoration: underline;
-    text-decoration-style: dotted;
+    font-weight: 700;
+    text-decoration: none;
     cursor: pointer;
+    transition: background 0.12s, box-shadow 0.12s;
+    box-shadow: inset 0 -1px 0 rgba(0,0,0,0.05);
 }
 
 .mention-chip:hover,
 .mention-chip:focus-visible {
-    color: #8f3f1f;
+    background: #ffe058;
+    color: #1a1200;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
+
+/* Tooltip used for SBD hover showing candidate full name */
+.sbd-tooltip {
+    position: fixed;
+    z-index: 2147483000;
+    background: #8f7606;
+    color: #ffffff;
+    border-radius: 0.45rem;
+    padding: 0.35rem 0.6rem;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+    font-size: 0.85rem;
+    line-height: 1.1;
+    max-width: 34rem;
+    word-break: keep-all;
+    pointer-events: none;
+}
+
+.sbd-tooltip[data-placement="top"]::after,
+.sbd-tooltip[data-placement="bottom"]::after {
+    content: "";
+    position: absolute;
+    left: 50%; transform: translateX(-50%);
+    width: 0; height: 0; border: 6px solid transparent;
+}
+.sbd-tooltip[data-placement="top"]::after { bottom: -11px; border-top-color: #8f7606; }
+.sbd-tooltip[data-placement="bottom"]::after { top: -11px; border-bottom-color: #8f7606; }
 
 .id-badge-btn {
     cursor: pointer;
@@ -592,10 +634,6 @@ body {
        Keeping overflow hidden here avoids a second scrollbar that used to
        appear when the content + reload button exceeded the pane's height. */
     overflow: hidden;
-}
-
-.md-preview-content {
-
 }
 
 .mention-preview-chip {
