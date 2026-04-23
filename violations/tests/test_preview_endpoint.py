@@ -44,7 +44,7 @@ class TestPreviewEndpoint:
         client.force_login(room_admin_user)
         res = client.post(self.url, {
             "sbd": "TS0032",
-            "violation_text": "Caught @{TS0032} cheating",
+            "violation_text": "Caught TS0032 cheating",
         })
         assert res.status_code == 200
         html = res.json()["html"]

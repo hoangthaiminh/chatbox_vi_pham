@@ -7,3 +7,4 @@ pymdown-extensions>=10.0
 beautifulsoup4>=4.12
 Pillow>=10.0
 pytest
+pytest-django
