@@ -66,49 +66,62 @@
     }
 
     function attachSbdValidation(inputEl) {
-        if (!inputEl) return;
+        if (!inputEl) return null;
         const feedback = document.getElementById('sbd-error');
+
+        // On the chatbox page we deliberately don't render the detailed
+        // message under the input (space-constrained compose bar). The
+        // detailed reason surfaces via a toast on submit instead; while
+        // typing, only the red border signals invalidity.
+        const inlineFeedbackEnabled = Boolean(feedback) && !is_chatbox_page;
+
         const setInvalid = (msg) => {
             inputEl.classList.add('is-invalid');
             inputEl.classList.remove('is-valid');
-            if (feedback && is_chatbox_page) {
-                feedback.textContent = '';
-                return;
-            }
-            if (feedback) feedback.textContent = msg || 'SBD không hợp lệ.';
-            return;
+            if (feedback) feedback.textContent = inlineFeedbackEnabled ? (msg || 'SBD không hợp lệ.') : '';
         };
         const setValid = () => {
             inputEl.classList.remove('is-invalid');
             inputEl.classList.add('is-valid');
             if (feedback) feedback.textContent = '';
         };
+        const clear = () => {
+            inputEl.classList.remove('is-invalid', 'is-valid');
+            if (feedback) feedback.textContent = '';
+            validate.lastError = null;
+        };
 
         function validate() {
             const v = (inputEl.value || '').trim();
             if (!v) {
-                setInvalid('SBD không được để trống.');
+                const msg = 'SBD không được để trống.';
+                setInvalid(msg);
+                validate.lastError = msg;
                 return false;
             }
             if (!isValidSbdSyntax(v)) {
-                setInvalid('SBD phải từ 1 đến 9 ký tự, chỉ gồm chữ cái và chữ số.');
+                const msg = 'SBD phải từ 1 đến 9 ký tự, chỉ gồm chữ cái và chữ số.';
+                setInvalid(msg);
+                validate.lastError = msg;
                 return false;
             }
             setValid();
+            validate.lastError = null;
             return true;
         }
+        validate.lastError = null;
+        validate.clear = clear;
 
         inputEl.addEventListener('input', () => {
-            // live validate but don't be aggressive
+            // Live validate but quietly: empty input resets to neutral.
             if (inputEl.value === '') {
-                inputEl.classList.remove('is-valid', 'is-invalid');
-                if (feedback) feedback.textContent = '';
+                clear();
                 return;
             }
             validate();
         });
 
-        // return validator for use on submit
+        // Return the validator; callers can also use .clear() / .lastError.
         return validate;
     }
 
@@ -557,10 +570,11 @@
         event.preventDefault();
         if (!composerForm || sendingComposer) return;
 
-        // client-side SBD validation
+        // client-side SBD validation — surface the detailed reason via the
+        // existing toast instead of cramming it under the compose input.
         if (typeof composeSbdValidate === 'function') {
             if (!composeSbdValidate()) {
-                showToast('SBD không hợp lệ.', 'danger');
+                showToast(composeSbdValidate.lastError || 'SBD không hợp lệ.', 'danger');
                 return;
             }
         }
@@ -586,6 +600,12 @@
             }
 
             composerForm.reset();
+            // form.reset() only clears values — the previous is-valid/
+            // is-invalid classes + feedback text would persist against an
+            // empty field, which is visually misleading. Reset them too.
+            if (composeSbdValidate && typeof composeSbdValidate.clear === "function") {
+                composeSbdValidate.clear();
+            }
             if (typeof refreshComposeEvidenceIndicator === "function") {
                 refreshComposeEvidenceIndicator();
             }
@@ -966,18 +986,81 @@
         return Boolean(ext && VIDEO_EXT_SET.has(ext));
     }
 
-    function validateEvidenceInput(input) {
-        if (!input || !input.files || !input.files[0]) return true;
-        const file = input.files[0];
+    function validateEvidenceFile(file) {
+        // Client-side preflight only. Server remains the source of truth; a
+        // bypass just fails the upload there with the same error.
+        if (!file) return true;
         if (fileLooksLikeVideo(file) && file.size > CLIENT_MAX_VIDEO_BYTES) {
             showToast(
                 `Video quá lớn (${formatFileSize(file.size)}). Dung lượng tối đa là 40 MB.`,
                 "danger",
             );
-            input.value = "";
             return false;
         }
         return true;
+    }
+
+    // Wraps a <input type="file"> so that cancelling the native picker, or
+    // picking a file that fails validation, leaves the previously-accepted
+    // file intact instead of silently wiping the attachment. The previously
+    // accepted File is kept in ``pendingFile`` and re-applied to the input
+    // via DataTransfer whenever a new selection fails.
+    //
+    // Returns { clear, getFile } for callers that need to reset state (e.g.
+    // a trash button, or post-submit form.reset()).
+    function wireEvidenceInput(input, { onIndicatorUpdate } = {}) {
+        if (!input) return { clear: () => {}, getFile: () => null };
+
+        let pendingFile = null;
+
+        const notify = () => {
+            if (typeof onIndicatorUpdate === "function") onIndicatorUpdate();
+        };
+
+        const applyPending = () => {
+            try {
+                const dt = new DataTransfer();
+                if (pendingFile) dt.items.add(pendingFile);
+                input.files = dt.files;
+            } catch (_) {
+                // DataTransfer not available: best-effort fallback. We can
+                // only clear, not restore, so drop pending to keep state
+                // consistent with what the input actually holds.
+                if (!pendingFile) {
+                    try { input.value = ""; } catch (__) { /* noop */ }
+                } else {
+                    pendingFile = null;
+                }
+            }
+            notify();
+        };
+
+        input.addEventListener("change", () => {
+            const picked = input.files && input.files[0];
+            if (!picked) {
+                // User cancelled the picker, or the browser cleared the
+                // selection — restore whatever we had committed before.
+                applyPending();
+                return;
+            }
+            if (!validateEvidenceFile(picked)) {
+                // New file rejected — roll back to the previous attachment.
+                applyPending();
+                return;
+            }
+            pendingFile = picked;
+            notify();
+        });
+
+        return {
+            clear() {
+                pendingFile = null;
+                applyPending();
+            },
+            getFile() {
+                return pendingFile;
+            },
+        };
     }
 
     function initComposeBar() {
@@ -1024,7 +1107,14 @@
 
         refreshComposeEvidenceIndicator = updateEvidenceIndicator;
 
-        // add a clear (trash) button to allow removing a selected file
+        const evidenceInput = getEvidenceInput();
+        const evidenceControl = wireEvidenceInput(evidenceInput, {
+            onIndicatorUpdate: updateEvidenceIndicator,
+        });
+
+        // Trash button clears the attachment. This is the only entry point
+        // that should drop the current file — cancelling the native picker
+        // or picking an invalid file must not wipe it.
         if (evidenceLabel) {
             const clearBtn = document.createElement('button');
             clearBtn.type = 'button';
@@ -1035,40 +1125,19 @@
             evidenceLabel.appendChild(clearBtn);
             clearBtn.addEventListener('click', (ev) => {
                 ev.preventDefault();
-                const oldInput = getEvidenceInput();
-                if (oldInput) {
-                    try {
-                        const newInput = oldInput.cloneNode(true);
-                        newInput.value = '';
-                        oldInput.parentNode.replaceChild(newInput, oldInput);
-                        newInput.addEventListener('change', () => {
-                            if (!validateEvidenceInput(newInput)) {
-                                updateEvidenceIndicator();
-                                return;
-                            }
-                            updateEvidenceIndicator();
-                        });
-                    } catch (_) {
-                        oldInput.value = '';
-                    }
-                }
-                updateEvidenceIndicator();
+                evidenceControl.clear();
             });
         }
 
-        const initialInput = getEvidenceInput();
-        if (initialInput) {
-            initialInput.addEventListener("change", () => {
-                const curEl = getEvidenceInput();
-                if (!curEl) return;
-                if (!validateEvidenceInput(curEl)) {
-                    updateEvidenceIndicator();
-                    return;
-                }
-                updateEvidenceIndicator();
-            });
-            updateEvidenceIndicator();
-        }
+        // form.reset() runs after a successful AJAX submit — mirror that into
+        // our backing state so the indicator clears and we don't restore a
+        // stale file on the next pick.
+        form.addEventListener("reset", () => {
+            // Let the browser clear input.files first, then sync state.
+            setTimeout(() => evidenceControl.clear(), 0);
+        });
+
+        updateEvidenceIndicator();
 
         // --- Unsaved-changes detection for composer (smart compare) ---------
         const getComposerText = () => {
@@ -1184,11 +1253,10 @@
         bindMarkdownEditorsIn(form);
 
         const evidenceInput = form.querySelector('input[type="file"][name="evidence"]');
-        if (evidenceInput) {
-            evidenceInput.addEventListener("change", () => {
-                validateEvidenceInput(evidenceInput);
-            });
-        }
+        // Same sticky-attachment behaviour as the composer: cancelling the
+        // native picker or picking an invalid file must not wipe a file the
+        // user has already selected on this page.
+        wireEvidenceInput(evidenceInput);
         // --- Unsaved-changes detection for edit page (smart compare) ---------
         (function attachEditUnsavedHandler() {
             const sbdInput = form.querySelector('input[name="sbd"]');
