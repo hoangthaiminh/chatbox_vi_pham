@@ -228,7 +228,7 @@ body {
 .sbd-tooltip {
     position: fixed;
     z-index: 2147483000;
-    background: rgb(12, 12, 12, 0.85);
+    background: rgb(12, 12, 12, 0.95);
     color: #ffffff;
     border-radius: 0.45rem;
     padding: 0.35rem 0.6rem;
@@ -247,8 +247,8 @@ body {
     left: 50%; transform: translateX(-50%);
     width: 0; height: 0; border: 6px solid transparent;
 }
-.sbd-tooltip[data-placement="top"]::after { bottom: -11px; border-top-color: rgb(12, 12, 12, 0.85); }
-.sbd-tooltip[data-placement="bottom"]::after { top: -11px; border-bottom-color: rgb(12, 12, 12, 0.85); }
+.sbd-tooltip[data-placement="top"]::after { bottom: -11px; border-top-color: rgb(12, 12, 12, 0.95); }
+.sbd-tooltip[data-placement="bottom"]::after { top: -11px; border-bottom-color: rgb(12, 12, 12, 0.95); }
 
 .id-badge-btn {
     cursor: pointer;
