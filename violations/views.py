@@ -5,7 +5,7 @@ import re
 import unicodedata
 
 from django.contrib import messages
-from django.contrib.auth import login, logout
+from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.db import models, transaction
@@ -24,6 +24,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from .forms import (
     ALLOWED_VIDEO_EXTENSIONS,
+    AdminPasswordChangeForm,
     CandidateImportForm,
     IncidentCreateForm,
     IncidentEditForm,
@@ -704,6 +705,33 @@ def login_view(request):
 def logout_view(request):
     logout(request)
     return redirect("violations:dashboard")
+
+
+@login_required
+def change_password_view(request):
+    """Let the signed-in admin rotate their own password.
+
+    Uses Django's built-in PasswordChangeForm (via ``AdminPasswordChangeForm``)
+    so the old-password verification, hashing and session-hash refresh all
+    follow the framework's hardened path. Custom policy is layered on via
+    ``validate_password_strength`` in ``forms.py``.
+    """
+    if request.method == "POST":
+        form = AdminPasswordChangeForm(user=request.user, data=request.POST)
+        if form.is_valid():
+            user = form.save()
+            # Keep the current session alive after the password hash rotates;
+            # otherwise Django would log the user out on the next request.
+            update_session_auth_hash(request, user)
+            messages.success(request, "Đổi mật khẩu thành công!")
+            return redirect("violations:dashboard")
+    else:
+        form = AdminPasswordChangeForm(user=request.user)
+
+    return render(request, "violations/change_password.html", {
+        "form": form,
+        "role_label": role_label(request.user),
+    })
 
 
 # ── Incident markdown preview (server-side rendering) ────────────────────────

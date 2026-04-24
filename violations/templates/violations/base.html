@@ -44,9 +44,31 @@
                 <div class="d-flex flex-wrap align-items-center gap-2 ms-lg-auto app-user-area">
                     <span class="badge rounded-pill text-bg-light border">{{ role_label|default:'Khách' }}</span>
                     {% if user.is_authenticated %}
-                        <span class="badge rounded-pill text-bg-dark">
+                        <div class="dropdown d-none d-lg-inline-block user-chip-dropdown">
+                            <button type="button"
+                                    class="badge rounded-pill text-bg-dark user-chip-toggle"
+                                    data-bs-toggle="dropdown"
+                                    aria-expanded="false"
+                                    aria-label="Menu tài khoản {{ user.username }}">
+                                <i class="bi bi-person-circle me-1"></i>{{ user.username }}
+                                <i class="bi bi-caret-down-fill ms-1 user-chip-caret"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end user-chip-menu">
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'violations:change_password' %}">
+                                        <i class="bi bi-key me-2"></i>Đổi mật khẩu
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <span class="badge rounded-pill text-bg-dark d-lg-none">
                             <i class="bi bi-person-circle me-1"></i>{{ user.username }}
                         </span>
+                        <span class="vr d-lg-none user-area-vr" aria-hidden="true"></span>
+                        <a href="{% url 'violations:change_password' %}"
+                           class="btn btn-outline-secondary btn-sm d-lg-none">
+                            <i class="bi bi-key me-1"></i>Đổi mật khẩu
+                        </a>
                         <form method="post" action="{% url 'violations:logout' %}" class="d-inline">
                             {% csrf_token %}
                             <button type="submit" class="btn btn-outline-secondary btn-sm">Đăng xuất</button>
