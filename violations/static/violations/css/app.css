@@ -1390,7 +1390,7 @@ body {
 .auth-label {
     position: absolute;
     left: 0.95rem;
-    top: 50%;
+    top: 1.625rem;
     transform: translateY(-50%);
     font-size: 0.95rem;
     color: #8a8f94;
@@ -1409,6 +1409,10 @@ body {
     background: #ffffff;
     padding: 0 0.3rem;
     font-weight: 600;
+}
+.auth-field.has-error .auth-input:not(:placeholder-shown) + .auth-label,
+.auth-field.has-error .auth-input:focus + .auth-label {
+    background: #fff5f5;
 }
 .auth-field.has-error .auth-input {
     border-color: #dc3545;
