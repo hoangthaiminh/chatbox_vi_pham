@@ -1,6 +1,8 @@
+import re
 from pathlib import Path
 
 from django import forms
+from django.contrib.auth.forms import PasswordChangeForm as DjangoPasswordChangeForm
 
 from .models import Incident
 from .services import MAX_SBD_LENGTH, MAX_VIOLATION_TEXT_LEN, is_valid_sbd_syntax
@@ -94,3 +96,83 @@ class IncidentEditForm(IncidentBaseForm):
 
 class CandidateImportForm(forms.Form):
     csv_file = forms.FileField(label="Tệp CSV")
+
+
+# ── Password change ──────────────────────────────────────────────────────────
+
+# Tightly-curated short list of passwords we refuse outright. The goal is not
+# to replicate a full dictionary (that would bloat the repo and be mostly
+# redundant once the character-class checks fire); it's to block the handful
+# of passwords admins tend to pick when rushed on exam day.
+COMMON_PASSWORDS = frozenset({
+    "password", "password1", "123456", "1234567", "12345678", "123456789",
+    "qwerty", "qwerty123", "abc123", "admin", "admin123", "administrator",
+    "letmein", "welcome", "iloveyou", "111111", "000000", "1q2w3e4r",
+    "monkey", "dragon", "passw0rd", "p@ssw0rd", "changeme",
+})
+
+# Whitelist of allowed password characters: ASCII letters, digits, and the
+# common shifted-keyboard specials. No whitespace, no control characters, no
+# Unicode — those are either footguns (invisible chars) or hard to re-type on
+# a kiosk keyboard.
+_PASSWORD_ALLOWED_RE = re.compile(
+    r"^[A-Za-z0-9!@#$%^&*()\-_=+\[\]{};:'\",.<>/?\\|`~]+$"
+)
+
+
+def validate_password_strength(value):
+    """Enforce the project's password policy.
+
+    Rules (all must pass):
+      * length ≥ 6
+      * only characters from the keyboard whitelist above (no spaces, no
+        control characters, no Unicode letters)
+      * not on the common-passwords blocklist
+      * contains at least one uppercase letter, one lowercase letter, and
+        one digit (special characters are optional but allowed)
+    """
+    if value is None:
+        return
+    if len(value) < 6:
+        raise forms.ValidationError("Mật khẩu phải có ít nhất 6 ký tự.")
+    if not _PASSWORD_ALLOWED_RE.match(value):
+        raise forms.ValidationError(
+            "Mật khẩu chứa ký tự không hợp lệ. Chỉ cho phép chữ cái (a-z, A-Z), "
+            "chữ số (0-9) và các ký tự đặc biệt thông dụng; không được có khoảng "
+            "trắng hay ký tự điều khiển."
+        )
+    if value.lower() in COMMON_PASSWORDS:
+        raise forms.ValidationError(
+            "Mật khẩu quá phổ biến. Vui lòng chọn mật khẩu khác."
+        )
+    if not re.search(r"[A-Z]", value):
+        raise forms.ValidationError("Mật khẩu phải có ít nhất 1 chữ cái in hoa.")
+    if not re.search(r"[a-z]", value):
+        raise forms.ValidationError("Mật khẩu phải có ít nhất 1 chữ cái thường.")
+    if not re.search(r"\d", value):
+        raise forms.ValidationError("Mật khẩu phải có ít nhất 1 chữ số.")
+
+
+class AdminPasswordChangeForm(DjangoPasswordChangeForm):
+    """Django's built-in PasswordChangeForm with our policy attached and
+    Vietnamese error messages for the two checks it performs itself."""
+
+    error_messages = {
+        **DjangoPasswordChangeForm.error_messages,
+        "password_incorrect": "Mật khẩu cũ không đúng. Vui lòng nhập lại.",
+        "password_mismatch": "Hai mật khẩu mới không trùng khớp.",
+    }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["old_password"].label = "Mật khẩu cũ"
+        self.fields["new_password1"].label = "Mật khẩu mới"
+        self.fields["new_password2"].label = "Nhập lại mật khẩu mới"
+        # Strip Django's default auto-generated help text (we show our own
+        # rules next to the submit button if needed).
+        self.fields["new_password1"].help_text = ""
+
+    def clean_new_password1(self):
+        password = self.cleaned_data.get("new_password1")
+        validate_password_strength(password)
+        return password
