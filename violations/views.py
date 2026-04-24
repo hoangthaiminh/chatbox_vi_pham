@@ -1,14 +1,23 @@
 import csv
 import io
 import mimetypes
+import re
 import unicodedata
 
 from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
-from django.db import models
-from django.http import FileResponse, Http404, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
+from django.db import models, transaction
+from django.http import (
+    FileResponse,
+    Http404,
+    HttpResponse,
+    HttpResponseBadRequest,
+    HttpResponseForbidden,
+    JsonResponse,
+    StreamingHttpResponse,
+)
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_GET, require_POST
@@ -19,7 +28,7 @@ from .forms import (
     IncidentCreateForm,
     IncidentEditForm,
 )
-from .models import Candidate, Incident
+from .models import Candidate, Incident, IncidentParticipant
 from .realtime import (
     INCIDENT_PAGE_SIZE,
     INCIDENT_UPDATE_LIMIT,
@@ -393,6 +402,21 @@ def candidate_detail(request, sbd):
 
 # ── Evidence file ─────────────────────────────────────────────────────────────
 
+_RANGE_HEADER_RE = re.compile(r"bytes=(\d*)-(\d*)")
+
+
+def _iter_file_chunks(file_handle, remaining, chunk_size=8192):
+    try:
+        while remaining > 0:
+            data = file_handle.read(min(chunk_size, remaining))
+            if not data:
+                break
+            remaining -= len(data)
+            yield data
+    finally:
+        file_handle.close()
+
+
 @require_GET
 def incident_evidence(request, pk):
     incident = get_object_or_404(Incident, pk=pk)
@@ -400,9 +424,59 @@ def incident_evidence(request, pk):
         raise Http404("Không có bằng chứng đính kèm.")
 
     guessed_type, _ = mimetypes.guess_type(incident.evidence.name)
-    file_handle = incident.evidence.open("rb")
-    response = FileResponse(file_handle, content_type=guessed_type or "application/octet-stream")
-    response["Content-Disposition"] = f'inline; filename="{incident.evidence.name.split("/")[-1]}"'
+    content_type = guessed_type or "application/octet-stream"
+    filename = incident.evidence.name.split("/")[-1]
+
+    try:
+        file_size = incident.evidence.size
+    except (OSError, NotImplementedError):
+        file_size = None
+
+    range_header = request.META.get("HTTP_RANGE", "").strip()
+    range_match = _RANGE_HEADER_RE.match(range_header) if range_header else None
+
+    if range_match and file_size is not None:
+        start_str, end_str = range_match.groups()
+        if start_str == "" and end_str == "":
+            response = HttpResponse(status=416)
+            response["Content-Range"] = f"bytes */{file_size}"
+            return response
+        if start_str == "":
+            # Suffix range: last N bytes.
+            suffix_length = int(end_str)
+            if suffix_length <= 0:
+                response = HttpResponse(status=416)
+                response["Content-Range"] = f"bytes */{file_size}"
+                return response
+            start = max(file_size - suffix_length, 0)
+            end = file_size - 1
+        else:
+            start = int(start_str)
+            end = int(end_str) if end_str else file_size - 1
+        if end >= file_size:
+            end = file_size - 1
+        if start > end or start >= file_size:
+            response = HttpResponse(status=416)
+            response["Content-Range"] = f"bytes */{file_size}"
+            return response
+        length = end - start + 1
+        file_handle = incident.evidence.open("rb")
+        file_handle.seek(start)
+        response = StreamingHttpResponse(
+            _iter_file_chunks(file_handle, length),
+            status=206,
+            content_type=content_type,
+        )
+        response["Content-Length"] = str(length)
+        response["Content-Range"] = f"bytes {start}-{end}/{file_size}"
+    else:
+        file_handle = incident.evidence.open("rb")
+        response = FileResponse(file_handle, content_type=content_type)
+        if file_size is not None:
+            response["Content-Length"] = str(file_size)
+
+    response["Accept-Ranges"] = "bytes"
+    response["Content-Disposition"] = f'inline; filename="{filename}"'
     response["Cache-Control"] = "no-store"
     response["X-Content-Type-Options"] = "nosniff"
     return response
@@ -522,38 +596,90 @@ def import_candidates(request):
         return default
 
     created_count = updated_count = truncated_count = 0
+    imported_sbds = []
 
-    for row in reader:
-        raw_sbd = row_value(row, ["sbd", "sobaodanh"])
-        if not raw_sbd:
-            continue
-        sbd, was_truncated = apply_default_prefix(raw_sbd)
-        if not sbd or not is_valid_sbd_syntax(sbd):
-            continue
+    with transaction.atomic():
+        for row in reader:
+            raw_sbd = row_value(row, ["sbd", "sobaodanh"])
+            if not raw_sbd:
+                continue
+            sbd, was_truncated = apply_default_prefix(raw_sbd)
+            if not sbd or not is_valid_sbd_syntax(sbd):
+                continue
 
-        defaults = {
-            "full_name": row_value(row, ["hovaten", "fullname", "name"], default="Chưa rõ")[:150],
-            "school": row_value(row, ["truong", "school"], default="Chưa rõ")[:150],
-            "supervisor_teacher": row_value(
-                row, ["gvpt", "giaovienphutrach", "supervisorteacher"], default="Chưa rõ"
-            )[:150],
-            "exam_room": row_value(row, ["phongthi", "examroom", "room"])[:50],
-        }
+            defaults = {
+                "full_name": row_value(row, ["hovaten", "fullname", "name"], default="Chưa rõ")[:150],
+                "school": row_value(row, ["truong", "school"], default="Chưa rõ")[:150],
+                "supervisor_teacher": row_value(
+                    row, ["gvpt", "giaovienphutrach", "supervisorteacher"], default="Chưa rõ"
+                )[:150],
+                "exam_room": row_value(row, ["phongthi", "examroom", "room"])[:50],
+            }
 
-        _, created = Candidate.objects.update_or_create(sbd=sbd, defaults=defaults)
-        if created:
-            created_count += 1
-        else:
-            updated_count += 1
-        if was_truncated:
-            truncated_count += 1
+            _, created = Candidate.objects.update_or_create(sbd=sbd, defaults=defaults)
+            if created:
+                created_count += 1
+            else:
+                updated_count += 1
+            if was_truncated:
+                truncated_count += 1
+            imported_sbds.append(sbd)
+
+        # Re-link incidents/participants whose SBDs are now covered by the
+        # updated candidate list. Without this, previously-unknown SBDs remain
+        # flagged as "Không tìm thấy hồ sơ thí sinh" and stay in the
+        # unknown-stats bucket. Scope the UPDATE to just the SBDs touched in
+        # this import so we don't sweep the entire unresolved history.
+        relinked_incidents, relinked_participants = _relink_candidates_to_references(
+            imported_sbds
+        )
 
     summary = f"Đã nhập danh sách thí sinh. Thêm mới: {created_count}, Cập nhật: {updated_count}."
     if truncated_count:
         summary += f" {truncated_count} SBD đã được cắt ngắn cho vừa {MAX_SBD_LENGTH} ký tự."
+    if relinked_incidents or relinked_participants:
+        summary += (
+            f" Đã gắn lại {relinked_incidents} tin nhắn chính và "
+            f"{relinked_participants} lượt nhắc với hồ sơ thí sinh."
+        )
     messages.success(request, summary)
     notify_live_update()
     return redirect("violations:dashboard")
+
+
+def _relink_candidates_to_references(sbds):
+    """Bind Incident.reported_candidate and IncidentParticipant.candidate to
+    Candidate rows whose SBD matches one of ``sbds``. Returns
+    ``(incident_count, participant_count)``.
+
+    Called right after a candidate import: the SBDs in ``sbds`` are the ones
+    just inserted/updated, so any incident/participant that previously had a
+    NULL FK because the candidate didn't exist can now be linked. SBDs are
+    stored upper-cased on both sides (see model ``save()`` methods), so the
+    equality join is exact and hits the db_index on both columns.
+    """
+    if not sbds:
+        return 0, 0
+
+    from django.db.models import OuterRef, Subquery
+
+    incident_lookup = Candidate.objects.filter(
+        sbd=OuterRef("reported_sbd")
+    ).values("pk")[:1]
+    incident_count = Incident.objects.filter(
+        reported_candidate__isnull=True,
+        reported_sbd__in=sbds,
+    ).update(reported_candidate=Subquery(incident_lookup))
+
+    participant_lookup = Candidate.objects.filter(
+        sbd=OuterRef("sbd_snapshot")
+    ).values("pk")[:1]
+    participant_count = IncidentParticipant.objects.filter(
+        candidate__isnull=True,
+        sbd_snapshot__in=sbds,
+    ).update(candidate=Subquery(participant_lookup))
+
+    return incident_count, participant_count
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
