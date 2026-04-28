@@ -31,6 +31,38 @@
 {% endblock %}
 
 {% block bottom_bar %}
+<div class="bottom-bar-stack">
+{% if can_delete_incidents %}
+<div class="incident-bulk-actionbar" id="incidentBulkActionbar" hidden aria-hidden="true">
+    <div class="incident-bulk-actionbar-inner">
+        <label class="incident-bulk-master-wrap" title="Chọn tất cả tin nhắn mà bạn có thể xoá (tối đa mới nhất)">
+            <input type="checkbox"
+                   class="cb-pretty incident-bulk-master"
+                   id="incidentBulkMasterCb"
+                   aria-label="Chọn tất cả tin nhắn có thể xoá">
+        </label>
+        <span class="incident-bulk-counter">
+            Đã chọn <strong class="js-bulk-count">0</strong> tin nhắn
+            <span class="text-muted small d-none d-md-inline">(tối đa <span class="js-bulk-max">50</span>)</span>
+        </span>
+        <div class="incident-bulk-actions ms-auto d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="incidentBulkCancelBtn">
+                <i class="bi bi-x-lg me-1"></i>Huỷ
+            </button>
+            <button type="button" class="btn btn-danger btn-sm" id="incidentBulkDeleteBtn" disabled>
+                <i class="bi bi-trash me-1"></i>
+                Xoá <span class="js-bulk-count">0</span> tin nhắn
+            </button>
+        </div>
+    </div>
+</div>
+{% endif %}
+<div class="compose-bar compose-bar--bulk-busy" id="composeBulkBusyNotice" hidden aria-hidden="true">
+    <div class="compose-bulk-busy-inner">
+        <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
+        <span class="text-muted">Đang có quá trình xoá nhiều tin nhắn diễn ra. Vui lòng chờ trong giây lát…</span>
+    </div>
+</div>
 {% if can_post %}
 <form method="post" action="{% url 'violations:create_incident' %}"
       enctype="multipart/form-data"
@@ -57,6 +89,7 @@
             <select name="incident_kind" id="id_incident_kind" class="form-select" title="Phân loại lỗi">
                 <option value="violation" selected>Vi phạm</option>
                 <option value="reminder">Nhắc nhở</option>
+                <option value="note">Ghi chú</option>
             </select>
         </div>
 
@@ -95,4 +128,5 @@
     <span class="text-muted small"><i class="bi bi-eye me-1"></i>Chế độ chỉ xem — chỉ Admin mới được đăng tin nhắn.</span>
 </div>
 {% endif %}
+</div>
 {% endblock %}

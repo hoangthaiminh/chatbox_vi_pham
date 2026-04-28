@@ -49,9 +49,11 @@ class RoomAdminProfile(models.Model):
 class Incident(models.Model):
     KIND_VIOLATION = "violation"
     KIND_REMINDER = "reminder"
+    KIND_NOTE = "note"
     INCIDENT_KIND_CHOICES = [
         (KIND_VIOLATION, "Vi phạm"),
         (KIND_REMINDER, "Nhắc nhở"),
+        (KIND_NOTE, "Ghi chú"),
     ]
 
     reported_sbd = models.CharField(max_length=9, db_index=True)
@@ -95,7 +97,7 @@ class Incident(models.Model):
     @classmethod
     def normalize_incident_kind(cls, value):
         normalized = (value or "").strip().lower()
-        if normalized in {cls.KIND_VIOLATION, cls.KIND_REMINDER}:
+        if normalized in {cls.KIND_VIOLATION, cls.KIND_REMINDER, cls.KIND_NOTE}:
             return normalized
         return cls.KIND_VIOLATION
 
@@ -114,6 +116,25 @@ class Incident(models.Model):
         if not user.groups.filter(name="room_admin").exists():
             return False
         return timezone.now() <= self.created_at + timedelta(hours=24)
+
+    def can_delete(self, user):
+        """Per-incident delete permission.
+
+        * Super admins (and Django superusers) may delete any incident.
+        * Room admins may delete ONLY the incidents they themselves posted
+          — they must not be able to remove a super admin's notice. There
+          is no time limit on deleting your own posts (different from
+          ``can_edit`` which caps edits at 24h, because cleaning up a
+          mistakenly posted message should always be possible).
+        * Anyone else (viewers, anonymous) cannot delete.
+        """
+        if not user.is_authenticated:
+            return False
+        if user.is_superuser or user.groups.filter(name="super_admin").exists():
+            return True
+        if not user.groups.filter(name="room_admin").exists():
+            return False
+        return self.created_by_id == user.id
 
     @property
     def evidence_is_image(self):

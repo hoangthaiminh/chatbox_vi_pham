@@ -11,7 +11,7 @@
                             <div class="card border-0 shadow-sm">
                                 <div class="card-body">
                                     <h6 class="mb-2">Nhập danh sách thí sinh (CSV)</h6>
-                                    <form method="post" action="{% url 'violations:import_candidates' %}" enctype="multipart/form-data" class="row g-2 align-items-end">
+                                    <form method="post" action="{% url 'violations:import_candidates' %}" enctype="multipart/form-data" class="row g-2 align-items-end" id="candidate-import-form">
                                         {% csrf_token %}
                                         <div class="col-12 col-md-8">
                                             <label class="form-label small mb-1" for="id_csv_file">Tệp CSV</label>
@@ -19,13 +19,152 @@
                                         </div>
                                         <div class="col-12 col-md-4 d-grid">
                                             <button class="btn btn-outline-dark" type="submit">
-                                                <i class="bi bi-upload me-1"></i>Nhập / cập nhật thí sinh
+                                                <i class="bi bi-upload me-1"></i>Nhập danh sách (ghi đè)
                                             </button>
                                         </div>
                                     </form>
                                     <p class="small text-muted mt-2 mb-0">
                                         Cột gợi ý: SBD, Ho va ten, Truong, GVPT, Phong thi.
                                     </p>
+                                    <p class="small text-danger mt-1 mb-0">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>
+                                        Lưu ý: thao tác này <strong>ghi đè toàn bộ</strong> dữ liệu thí sinh hiện có. Mọi SBD không nằm trong tệp mới sẽ bị xoá khỏi hồ sơ thí sinh (tin nhắn cũ vẫn được giữ nhưng sẽ ghi nhận là "không tìm thấy hồ sơ thí sinh").
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="card border-0 shadow-sm">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                                        <h6 class="mb-0">
+                                            Danh sách thí sinh trong dữ liệu
+                                            <span class="badge text-bg-light border ms-1" id="candidate-list-count">{{ all_candidates|length }}</span>
+                                        </h6>
+                                        <button type="button"
+                                                class="btn btn-outline-secondary btn-sm"
+                                                id="candidate-list-toggle"
+                                                data-target="candidate-list-wrap"
+                                                data-state="hidden"
+                                                aria-expanded="false"
+                                                aria-controls="candidate-list-wrap">
+                                            <i class="bi bi-eye me-1"></i><span class="js-toggle-label">Hiện danh sách thí sinh</span>
+                                        </button>
+                                    </div>
+                                    <div id="candidate-list-wrap"
+                                         class="candidate-list-wrap"
+                                         data-create-url="{% url 'violations:candidate_create' %}"
+                                         data-bulk-delete-url="{% url 'violations:candidate_bulk_delete' %}"
+                                         data-export-url="{% url 'violations:candidate_export_csv' %}"
+                                         hidden>
+
+                                        <div class="candidate-toolbar d-flex flex-wrap align-items-center gap-2 mb-2">
+                                            <label class="cb-pretty-wrap" title="Chọn tất cả">
+                                                <input type="checkbox"
+                                                       class="cb-pretty"
+                                                       id="candidate-select-all"
+                                                       aria-label="Chọn tất cả thí sinh">
+                                            </label>
+                                            <button type="button"
+                                                    class="btn btn-danger btn-sm d-none align-items-center gap-1"
+                                                    id="candidate-bulk-delete-btn"
+                                                    aria-label="Xoá các thí sinh đã chọn">
+                                                <i class="bi bi-trash"></i>
+                                                <span>Xoá đã chọn (<span class="js-selected-count">0</span>)</span>
+                                            </button>
+                                            <span class="candidate-selection-counter text-muted small d-none" id="candidate-selection-counter">
+                                                Đã chọn <span class="js-selected-count">0</span>
+                                            </span>
+                                            <div class="ms-auto d-flex align-items-center gap-2 flex-wrap">
+                                                <a href="{% url 'violations:candidate_export_csv' %}"
+                                                   class="btn btn-outline-success btn-sm"
+                                                   id="candidate-export-csv"
+                                                   download>
+                                                    <i class="bi bi-filetype-csv me-1"></i>Xuất CSV
+                                                </a>
+                                            </div>
+                                        </div>
+
+                                        <div class="candidate-empty-state text-muted small py-3 text-center {% if all_candidates %}d-none{% endif %}"
+                                             id="candidate-empty-state">
+                                            <i class="bi bi-inbox d-block mb-2" style="font-size: 1.6rem;"></i>
+                                            <div class="mb-2">Chưa có dữ liệu thí sinh nào.</div>
+                                            <button type="button" class="btn btn-success btn-sm" id="candidate-empty-add-btn">
+                                                <i class="bi bi-plus-lg me-1"></i>Thêm thí sinh đầu tiên
+                                            </button>
+                                        </div>
+
+                                        <div class="table-responsive candidate-list-scroll {% if not all_candidates %}d-none{% endif %}"
+                                             id="candidate-list-table-wrap">
+                                            <table class="table table-sm table-striped align-middle mb-0 candidate-list-table" id="candidate-list-table">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th scope="col" class="cb-col"><span class="visually-hidden">Chọn</span></th>
+                                                        <th scope="col" class="num-col">#</th>
+                                                        <th scope="col">SBD</th>
+                                                        <th scope="col">Họ và tên</th>
+                                                        <th scope="col">Trường</th>
+                                                        <th scope="col">GVPT</th>
+                                                        <th scope="col">Phòng thi</th>
+                                                        <th scope="col" class="action-col text-end">Hành động</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="candidate-list-tbody">
+                                                    {% for c in all_candidates %}
+                                                        <tr data-candidate-id="{{ c.id }}"
+                                                            data-sbd="{{ c.sbd }}"
+                                                            data-full-name="{{ c.full_name }}"
+                                                            data-school="{{ c.school }}"
+                                                            data-supervisor-teacher="{{ c.supervisor_teacher }}"
+                                                            data-exam-room="{{ c.exam_room }}">
+                                                            <td class="cb-col">
+                                                                <label class="cb-pretty-wrap" title="Chọn thí sinh này">
+                                                                    <input type="checkbox"
+                                                                           class="cb-pretty js-candidate-row-cb"
+                                                                           aria-label="Chọn {{ c.sbd }}">
+                                                                </label>
+                                                            </td>
+                                                            <td class="text-muted num-col js-row-index">{{ forloop.counter }}</td>
+                                                            <td class="js-cell-sbd">
+                                                                <button type="button"
+                                                                        class="btn btn-link btn-sm p-0 fw-semibold js-open-candidate-detail"
+                                                                        data-sbd="{{ c.sbd }}">
+                                                                    {{ c.sbd }}
+                                                                </button>
+                                                            </td>
+                                                            <td class="js-cell-full-name">{{ c.full_name }}</td>
+                                                            <td class="js-cell-school">{{ c.school }}</td>
+                                                            <td class="js-cell-supervisor-teacher">{{ c.supervisor_teacher }}</td>
+                                                            <td class="js-cell-exam-room">{{ c.exam_room|default:"—" }}</td>
+                                                            <td class="action-col text-end">
+                                                                <div class="candidate-action-group" role="group" aria-label="Thao tác cho thí sinh {{ c.sbd }}">
+                                                                    <button type="button"
+                                                                            class="candidate-action-btn is-add js-candidate-add"
+                                                                            title="Thêm thí sinh mới (mẫu) bên dưới"
+                                                                            aria-label="Thêm thí sinh mới">
+                                                                        <i class="bi bi-plus-lg"></i>
+                                                                    </button>
+                                                                    <button type="button"
+                                                                            class="candidate-action-btn is-edit js-candidate-edit"
+                                                                            title="Sửa thông tin thí sinh"
+                                                                            aria-label="Sửa thí sinh {{ c.sbd }}">
+                                                                        <i class="bi bi-pencil-square"></i>
+                                                                    </button>
+                                                                    <button type="button"
+                                                                            class="candidate-action-btn is-delete js-candidate-delete"
+                                                                            title="Xoá thí sinh"
+                                                                            aria-label="Xoá thí sinh {{ c.sbd }}">
+                                                                        <i class="bi bi-trash"></i>
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -60,4 +199,55 @@
         <div class="text-center py-4 text-muted">Chọn một thí sinh từ bảng thống kê.</div>
     </div>
 </div>
+
+{% if can_import_candidates %}
+<div class="modal fade" id="candidateEditModal" tabindex="-1" aria-labelledby="candidateEditModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <form id="candidate-edit-form" novalidate>
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="candidateEditModalLabel">
+                        <i class="bi bi-pencil-square me-1"></i>Sửa thông tin thí sinh
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="candidate_id" id="cef-id">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small mb-1" for="cef-sbd">SBD <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="sbd" id="cef-sbd" maxlength="9" required autocomplete="off">
+                            <div class="form-text small">Chỉ dùng chữ cái và chữ số, tối đa 9 ký tự.</div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small mb-1" for="cef-exam-room">Phòng thi</label>
+                            <input type="text" class="form-control" name="exam_room" id="cef-exam-room" maxlength="50" autocomplete="off">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small mb-1" for="cef-full-name">Họ và tên</label>
+                            <input type="text" class="form-control" name="full_name" id="cef-full-name" maxlength="150" autocomplete="off">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small mb-1" for="cef-school">Trường</label>
+                            <input type="text" class="form-control" name="school" id="cef-school" maxlength="150" autocomplete="off">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small mb-1" for="cef-supervisor-teacher">Giáo viên phụ trách</label>
+                            <input type="text" class="form-control" name="supervisor_teacher" id="cef-supervisor-teacher" maxlength="150" autocomplete="off">
+                        </div>
+                    </div>
+                    <div class="alert alert-danger small mt-3 d-none" id="cef-error" role="alert"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Huỷ</button>
+                    <button type="submit" class="btn btn-primary" id="cef-save-btn">
+                        <i class="bi bi-check2 me-1"></i>Lưu
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

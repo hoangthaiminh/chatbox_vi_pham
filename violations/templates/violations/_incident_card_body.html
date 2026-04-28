@@ -23,6 +23,8 @@
     <span class="badge text-bg-danger">{{ incident.reported_sbd|upper }}</span>
     {% if incident.incident_kind == 'reminder' %}
         <span class="badge text-bg-info">Nhắc nhở</span>
+    {% elif incident.incident_kind == 'note' %}
+        <span class="badge text-bg-secondary">Ghi chú</span>
     {% else %}
         <span class="badge text-bg-danger-subtle text-danger-emphasis border">Vi phạm</span>
     {% endif %}
@@ -39,22 +41,19 @@
 
 <div class="chat-text markdown-body">{{ incident.violation_text|render_violation:incident.is_markdown }}</div>
 
-{# Divider between message body and footer (mentions / evidence / actions) #}
-{# Avoid touching the related manager on unsaved preview instances. #}
 {% if mode != "preview" %}
     {% with mentions=incident.participants.all %}
         {% if mentions or incident.evidence %}
             <div class="chat-divider mt-2 mb-2" aria-hidden="true"></div>
         {% else %}
             {% if mode == "full" %}
-                {% if editable and incident.id in editable_incident_ids or can_delete_incidents %}
+                {% if editable and incident.id in editable_incident_ids or incident.id in deletable_incident_ids %}
                     <div class="chat-divider mt-2 mb-2" aria-hidden="true"></div>
                 {% endif %}
             {% endif %}
         {% endif %}
     {% endwith %}
 {% else %}
-    {# Preview: only show divider if there's evidence (participants unavailable). #}
     {% if incident.evidence %}
         <div class="chat-divider mt-2 mb-2" aria-hidden="true"></div>
     {% endif %}
@@ -116,14 +115,14 @@
 {% endif %}
 
 {% if mode == "full" and incident.id %}
-    {% if editable and incident.id in editable_incident_ids or can_delete_incidents %}
+    {% if editable and incident.id in editable_incident_ids or incident.id in deletable_incident_ids %}
         <div class="mt-3 d-flex gap-2 flex-wrap">
             {% if editable and incident.id in editable_incident_ids %}
                 <a href="{% url 'violations:edit_incident' incident.pk %}" class="btn btn-outline-dark btn-sm">
                     <i class="bi bi-pencil-square me-1"></i>Sửa
                 </a>
             {% endif %}
-            {% if can_delete_incidents %}
+            {% if incident.id in deletable_incident_ids %}
                 <form method="post"
                       action="{% url 'violations:delete_incident' incident.pk %}"
                       class="d-inline js-delete-incident-form"
