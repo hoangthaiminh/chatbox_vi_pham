@@ -13,7 +13,7 @@
     <link href="{% static 'violations/css/app.css' %}" rel="stylesheet">
     {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body{% if user.is_authenticated %} data-user-id="{{ user.id }}"{% endif %}>
     <div class="bg-shape bg-shape-left"></div>
     <div class="bg-shape bg-shape-right"></div>
 
@@ -39,6 +39,17 @@
                         <a href="{% url 'violations:statistics' %}" class="btn btn-sm {% if current_page == 'statistics' %}btn-dark{% else %}btn-outline-dark{% endif %}">
                             Thống kê
                         </a>
+                        {% if current_page == 'dashboard' and can_delete_incidents %}
+                            <span class="vr d-none d-lg-inline-block bulk-select-divider" aria-hidden="true"></span>
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-dark page-switch-bulk-select"
+                                    id="incident-bulk-select-toggle"
+                                    aria-pressed="false"
+                                    aria-label="Bật chế độ chọn nhiều tin nhắn">
+                                <i class="bi bi-check2-square me-1"></i>
+                                <span class="js-toggle-label">Chọn nhiều tin nhắn</span>
+                            </button>
+                        {% endif %}
                     </div>
                 {% endwith %}
                 <div class="d-flex flex-wrap align-items-center gap-2 ms-lg-auto app-user-area">
@@ -121,6 +132,21 @@
                     <i class="bi bi-trash me-1"></i>Xoá
                 </button>
             </div>
+        </div>
+    </div>
+
+    <div class="app-busy-overlay" id="appBusyOverlay" hidden aria-hidden="true" role="alertdialog" aria-modal="true" aria-labelledby="appBusyOverlayTitle" aria-describedby="appBusyOverlayMessage">
+        <div class="app-busy-backdrop"></div>
+        <div class="app-busy-panel" role="document">
+            <div class="app-busy-spinner" aria-hidden="true">
+                <div class="spinner-border text-light" role="status">
+                    <span class="visually-hidden">Đang xử lý...</span>
+                </div>
+            </div>
+            <h5 class="app-busy-title" id="appBusyOverlayTitle">Đang cập nhật cơ sở dữ liệu</h5>
+            <p class="app-busy-message" id="appBusyOverlayMessage">
+                Vui lòng chờ thao tác của bạn hoàn tất...
+            </p>
         </div>
     </div>
 

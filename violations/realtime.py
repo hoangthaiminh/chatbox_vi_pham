@@ -139,12 +139,24 @@ def get_editable_incident_ids(incidents, user):
     return [incident.id for incident in incidents if incident.can_edit(user)]
 
 
+def get_deletable_incident_ids(incidents, user):
+    """Return the subset of ``incidents`` IDs that ``user`` may delete.
+
+    Mirrors ``get_editable_incident_ids`` but uses ``Incident.can_delete``,
+    so room admins do NOT see a delete button on a super admin's posts.
+    """
+    if not getattr(user, "is_authenticated", False):
+        return []
+    return [incident.id for incident in incidents if incident.can_delete(user)]
+
+
 def render_incident_rows_html(incidents, user):
     return render_to_string(
         "violations/_incident_rows.html",
         {
             "incidents": incidents,
             "editable_incident_ids": get_editable_incident_ids(incidents, user),
+            "deletable_incident_ids": get_deletable_incident_ids(incidents, user),
             "current_user_id": user.id if getattr(user, "is_authenticated", False) else None,
             "can_delete_incidents": can_delete_incidents(user),
         },

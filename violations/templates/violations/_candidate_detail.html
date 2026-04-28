@@ -32,6 +32,9 @@
     <div class="candidate-rule-summary mb-3 {% if rule_summary.is_out %}candidate-rule-summary--out{% endif %}">
         <span class="badge text-bg-danger">Vi phạm: {{ rule_summary.violation_count }}</span>
         <span class="badge text-bg-info">Nhắc nhở: {{ rule_summary.reminder_count }}</span>
+        {% if rule_summary.note_count %}
+            <span class="badge text-bg-secondary" title="Ghi chú không tính vào quy đổi quy chế">Ghi chú: {{ rule_summary.note_count }}</span>
+        {% endif %}
         <span class="badge text-bg-warning">Quy đổi: {{ rule_summary.effective_violations }}</span>
         {% if rule_summary.is_out %}
             <span class="badge text-bg-danger">Cấm thi</span>
@@ -50,6 +53,8 @@
                     </button>
                     {% if incident.incident_kind == 'reminder' %}
                         <span class="badge text-bg-info">Nhắc nhở</span>
+                    {% elif incident.incident_kind == 'note' %}
+                        <span class="badge text-bg-secondary">Ghi chú</span>
                     {% else %}
                         <span class="badge text-bg-danger-subtle text-danger-emphasis border">Vi phạm</span>
                     {% endif %}

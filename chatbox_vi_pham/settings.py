@@ -119,6 +119,60 @@ CHANNEL_LAYERS = {
 }
 
 
+# ─── Cache (used by violations.locks for the candidate-mutation lock) ─────────
+#
+# IMPORTANT: the candidate-mutation lock relies on ``cache.add()`` being an
+# atomic compare-and-set across processes. If you ever deploy with multiple
+# Daphne/uWSGI workers, you MUST configure a SHARED cache backend
+# (Redis or Memcached) so the lock prevents concurrent writes across workers.
+#
+# Activation precedence:
+#   1. ``DJANGO_REDIS_URL`` env var → Redis (django-redis or core django.core.cache.backends.redis)
+#   2. ``DJANGO_MEMCACHED_LOCATION`` env var → Memcached (pymemcache backend)
+#   3. Fallback → ``LocMemCache`` (single-process only; logs a runtime warning
+#      from violations.locks when the lock is exercised in a multi-worker setup).
+#
+# The fallback keeps single-worker dev hassle-free. Production hosts should
+# set DJANGO_REDIS_URL.
+
+_redis_url = os.environ.get("DJANGO_REDIS_URL", "").strip()
+_memcached_location = os.environ.get("DJANGO_MEMCACHED_LOCATION", "").strip()
+
+if _redis_url:
+    CACHES = {
+        "default": {
+            # Django 4+ ships a built-in Redis backend (no extra package needed
+            # for the basic feature set the lock uses).
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": _redis_url,
+            "TIMEOUT": 300,
+            "KEY_PREFIX": "cbvp",
+        }
+    }
+    CACHE_BACKEND_KIND = "redis"
+elif _memcached_location:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+            "LOCATION": _memcached_location,
+            "TIMEOUT": 300,
+            "KEY_PREFIX": "cbvp",
+        }
+    }
+    CACHE_BACKEND_KIND = "memcached"
+else:
+    # Single-process fallback. The lock works correctly inside a single Daphne
+    # worker but is NOT shared across workers — see warning above.
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "cbvp-locmem",
+            "TIMEOUT": 300,
+        }
+    }
+    CACHE_BACKEND_KIND = "locmem"
+
+
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
