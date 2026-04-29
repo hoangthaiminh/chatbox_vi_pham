@@ -786,17 +786,19 @@ def incident_evidence(request, pk):
 @require_GET
 @login_required
 def candidate_search(request):
+    # Mention autocomplete endpoint. The query is taken VERBATIM — no
+    # implicit "TS" prefix when the user types digits. Reason: in a mention
+    # ("@1") the user is filtering by the literal characters they wrote, so
+    # auto-prefixing "TS" would silently swap "@1 -> sbd contains TS1" and
+    # surface candidates whose SBD has "TS1" as a substring even though the
+    # user typed "1". A plain ``icontains`` already matches "TS001" /
+    # "TS010" / "TS100" naturally because they all contain "1", so we don't
+    # lose any helpful results by dropping the dual filter.
     q = (request.GET.get("q") or "").strip().upper()[:50]
     if not q:
         qs = Candidate.objects.all().order_by("sbd")[:20]
     else:
-        if q.isdigit():
-            canonical, _ = apply_default_prefix(q)
-            qs = Candidate.objects.filter(
-                models.Q(sbd__icontains=q) | models.Q(sbd__icontains=canonical)
-            ).order_by("sbd")[:20]
-        else:
-            qs = Candidate.objects.filter(sbd__icontains=q).order_by("sbd")[:20]
+        qs = Candidate.objects.filter(sbd__icontains=q).order_by("sbd")[:20]
     results = [{"sbd": c.sbd, "full_name": c.full_name} for c in qs]
     return JsonResponse({"results": results})
 

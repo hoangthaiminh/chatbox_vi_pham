@@ -1150,6 +1150,425 @@
         }
     }
 
+    // ── Mention autocomplete ────────────────────────────────────────────────
+    //
+    // Pop a candidate dropdown when the user types "@" in any input or
+    // textarea wrapped in ``.mention-textarea-wrap``. Mirrors the strict
+    // server-side rule (``SBD_PATTERN`` in violations/services.py): the
+    // "@" must sit at start-of-text or right after whitespace, the run
+    // after it must be 1..MENTION_MAX_QUERY alphanumerics. The moment the
+    // user types something that breaks the syntax (length > 9, a non
+    // alphanumeric char, etc.) we hide the dropdown.
+    //
+    // Picking a row replaces the "@<query>" run with "@TS123 " (a single
+    // trailing space, unless the next char is already whitespace) and
+    // moves the caret past the space — same convention Messenger / Zalo
+    // use, so chained mentions ("@TS123 @TS124") feel natural.
+
+    // Mirrors MAX_SBD_LENGTH on the server.
+    const MENTION_MAX_QUERY = 9;
+    const MENTION_QUERY_RE = /^[A-Za-z0-9]{0,9}$/;
+    // Per-query results cache. Keyed by the uppercase query string. Cleared
+    // on any ``candidates_changed`` WS event so a roster import / edit /
+    // delete on another tab is reflected on the next open without reload.
+    const _mentionCache = new Map();
+    const MENTION_CACHE_TTL_MS = 30 * 1000;
+
+    onCandidatesChanged(() => _mentionCache.clear());
+
+    async function fetchMentionCandidates(query) {
+        const key = (query || "").toUpperCase();
+        const cached = _mentionCache.get(key);
+        const now = Date.now();
+        if (cached && (now - cached.ts) < MENTION_CACHE_TTL_MS) return cached.results;
+        try {
+            const url = `/api/candidates/search/?q=${encodeURIComponent(query || "")}`;
+            const res = await fetch(url, {
+                headers: { "X-Requested-With": "XMLHttpRequest" },
+                credentials: "same-origin",
+            });
+            if (!res.ok) return [];
+            const data = await res.json();
+            const results = Array.isArray(data.results) ? data.results : [];
+            _mentionCache.set(key, { ts: now, results });
+            return results;
+        } catch (_) {
+            return [];
+        }
+    }
+
+    // Build a hidden mirror element to measure the caret position in screen
+    // pixels. Algorithm based on the well-tested ``textarea-caret-position``
+    // approach: clone every layout-affecting style onto a hidden block-level
+    // div, fill it with the text up to the caret, and append a marker span
+    // whose offset within the div is exactly where the caret sits.
+    //
+    // Two crucial details that the previous, simpler implementation missed:
+    //   • ``offsetTop`` / ``offsetLeft`` are measured from the offset
+    //     parent's PADDING edge, not its border edge. Adding the input's
+    //     border-{top,left}-width converts the value to a "border-edge
+    //     relative" offset so callers can sum it with ``getBoundingClientRect``
+    //     (which returns border-edge coordinates) without an off-by-N drift.
+    //   • The marker span needs visible content. Using "\u200b" (zero-width
+    //     space) made some browsers fold the span to height 0, which then
+    //     made the dropdown jump to the bottom of the mirror box for empty
+    //     textareas. Using "." (or the remaining text) lays out reliably.
+    //
+    // Returns top/left RELATIVE TO THE INPUT'S BORDER EDGE plus the active
+    // line height. Caller composes those with ``input.getBoundingClientRect()``
+    // to get viewport coordinates for ``position: fixed`` placement.
+    const _MIRROR_PROPS = [
+        "boxSizing", "width", "height",
+        "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth",
+        "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
+        "fontFamily", "fontSize", "fontWeight", "fontStyle", "fontVariant", "lineHeight",
+        "letterSpacing", "wordSpacing", "textAlign", "textTransform", "textIndent",
+        "whiteSpace", "wordBreak", "overflowWrap",
+        "tabSize", "MozTabSize",
+    ];
+    function measureCaret(el) {
+        try {
+            const isInput = el.tagName === "INPUT";
+            const style = window.getComputedStyle(el);
+            const div = document.createElement("div");
+            _MIRROR_PROPS.forEach((p) => {
+                const v = style[p];
+                if (v != null && v !== "") div.style[p] = v;
+            });
+            div.style.position = "absolute";
+            div.style.visibility = "hidden";
+            div.style.top = "0";
+            div.style.left = "-9999px";
+            div.style.overflow = "hidden";
+            // <textarea> wraps; <input> never does. The whitespace replace
+            // below stops adjacent spaces in <input> values from collapsing
+            // when laid out in the mirror's pre-wrap block (they would in
+            // a real <input> render at their natural width).
+            if (isInput) {
+                div.style.whiteSpace = "nowrap";
+            } else {
+                div.style.whiteSpace = "pre-wrap";
+                div.style.wordWrap = "break-word";
+            }
+            const caret = el.selectionStart || 0;
+            let before = el.value.slice(0, caret);
+            if (isInput) {
+                // <input> collapses runs of whitespace; mirror them with
+                // U+00A0 to preserve the visual width.
+                before = before.replace(/\s/g, "\u00a0");
+            }
+            div.textContent = before;
+            const span = document.createElement("span");
+            // Use the rest of the text (or a single character fallback) as
+            // the marker so the span has a measurable height. Empty/zero
+            // width markers misbehave in some Firefox/Safari versions.
+            const after = el.value.slice(caret);
+            span.textContent = (isInput ? after.replace(/\s/g, "\u00a0") : after) || ".";
+            div.appendChild(span);
+            document.body.appendChild(div);
+
+            const borderTop = parseFloat(style.borderTopWidth) || 0;
+            const borderLeft = parseFloat(style.borderLeftWidth) || 0;
+            const lineHeightCss = parseFloat(style.lineHeight);
+            const lineHeight = Number.isFinite(lineHeightCss) && lineHeightCss > 0
+                ? lineHeightCss
+                : (parseFloat(style.fontSize) || 14) * 1.4;
+
+            const coords = {
+                top: span.offsetTop + borderTop - el.scrollTop,
+                left: span.offsetLeft + borderLeft - el.scrollLeft,
+                lineHeight,
+            };
+            document.body.removeChild(div);
+            return coords;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function bindMentionAutocomplete(input) {
+        if (!input || input.dataset.mentionBound === "1") return;
+        const wrap = input.closest(".mention-textarea-wrap");
+        if (!wrap) return;
+        const dropdown = wrap.querySelector(".mention-dropdown");
+        if (!dropdown) return;
+        input.dataset.mentionBound = "1";
+
+        // Re-parent the dropdown to <body>. The CSS has it at
+        // ``position: fixed``, but a fixed-positioned element is still
+        // anchored to the nearest ancestor that has ``transform``,
+        // ``filter`` or ``perspective`` set — and the chatbox layout
+        // sometimes wraps the composer in an animated/transformed
+        // container, which silently shifts the dropdown by the parent's
+        // transform offset. Hoisting the node to <body> guarantees the
+        // ``top``/``left`` we set are interpreted in viewport coordinates,
+        // which is what the placement math assumes.
+        if (dropdown.parentElement !== document.body) {
+            document.body.appendChild(dropdown);
+        }
+
+        // Live state for one editor. Kept inside the closure so two
+        // editors on the same page (e.g. simple input + MD textarea on the
+        // dashboard) don't accidentally share a "currently open" flag.
+        const state = {
+            open: false,
+            atPos: -1,    // index of '@' in input.value
+            query: "",    // alphanumeric run between '@' and the caret
+            results: [],
+            active: 0,    // keyboard-highlighted row
+            seq: 0,       // increments per fetch, drops stale responses
+        };
+        let pendingTimer = null;
+
+        function close() {
+            state.open = false;
+            state.atPos = -1;
+            state.query = "";
+            state.results = [];
+            state.active = 0;
+            dropdown.classList.remove("open");
+            dropdown.innerHTML = "";
+        }
+
+        // Determine whether the caret is currently inside a valid "@<query>"
+        // run. Returns null when no dropdown should be shown — used both to
+        // open AND to close (any rule violation -> close).
+        function detectContext() {
+            if (input.disabled || input.readOnly) return null;
+            const caret = input.selectionStart;
+            if (caret == null || caret !== input.selectionEnd) return null;
+            const value = input.value;
+            // Walk back from caret while seeing alphanumerics; expect '@'
+            // immediately before that run. Anything else (whitespace,
+            // punctuation, Unicode letters such as Vietnamese diacritics)
+            // means the caret is no longer inside a mention run.
+            let i = caret;
+            while (i > 0) {
+                const ch = value[i - 1];
+                if (ch === "@") break;
+                if (!/[A-Za-z0-9]/.test(ch)) return null;
+                i -= 1;
+                // Bail out early if the run is already too long to be a
+                // valid SBD: this is what makes "@TS1234567890" stop
+                // suggesting once the user passes 9 chars.
+                if (caret - i > MENTION_MAX_QUERY) return null;
+            }
+            if (i === 0 || value[i - 1] !== "@") return null;
+            const atPos = i - 1;
+            // Server rule: '@' must be at start-of-text or after whitespace.
+            if (atPos > 0 && !/\s/.test(value[atPos - 1])) return null;
+            const query = value.slice(atPos + 1, caret);
+            if (query.length > MENTION_MAX_QUERY) return null;
+            if (!MENTION_QUERY_RE.test(query)) return null;
+            return { atPos, query };
+        }
+
+        function renderList() {
+            if (!state.results.length) {
+                dropdown.innerHTML =
+                    '<div class="mention-dropdown-empty">Không có thí sinh phù hợp.</div>';
+                return;
+            }
+            const html = state.results.map((c, idx) => (
+                `<div class="mention-item${idx === state.active ? " active" : ""}"`
+                + ` role="option" data-idx="${idx}" data-sbd="${escHtml(c.sbd)}">`
+                + `<span class="mention-item-sbd">${escHtml(c.sbd)}</span>`
+                + `<span class="mention-item-name">${escHtml(c.full_name || "")}</span>`
+                + `</div>`
+            )).join("");
+            dropdown.innerHTML = html;
+        }
+
+        function positionDropdown() {
+            // Place the dropdown just above the caret. If there isn't enough
+            // room above (e.g. composer pinned to the bottom of the chatbox
+            // — the most common case), drop it BELOW the caret line instead.
+            const inputRect = input.getBoundingClientRect();
+            const caret = measureCaret(input);
+            const dropH = dropdown.offsetHeight || 220;
+            const dropW = dropdown.offsetWidth || 260;
+
+            let baseTop;
+            let baseLeft;
+            if (caret) {
+                const caretAbsTop = inputRect.top + caret.top;
+                const caretAbsLeft = inputRect.left + caret.left;
+                const spaceAbove = caretAbsTop;
+                const spaceBelow = window.innerHeight - (caretAbsTop + caret.lineHeight);
+                if (spaceAbove >= dropH + 8 || spaceAbove >= spaceBelow) {
+                    baseTop = caretAbsTop - dropH - 4;
+                } else {
+                    baseTop = caretAbsTop + caret.lineHeight + 4;
+                }
+                baseLeft = caretAbsLeft;
+            } else {
+                // Mirror failed (very old browser?) — fall back to anchoring
+                // the dropdown to the top-left of the input. Not pretty,
+                // but never breaks the feature.
+                baseTop = inputRect.top - dropH - 4;
+                baseLeft = inputRect.left;
+            }
+
+            // Clamp to viewport so the dropdown never spills off-screen.
+            const margin = 8;
+            if (baseLeft + dropW > window.innerWidth - margin) {
+                baseLeft = window.innerWidth - dropW - margin;
+            }
+            if (baseLeft < margin) baseLeft = margin;
+            if (baseTop < margin) baseTop = margin;
+            if (baseTop + dropH > window.innerHeight - margin) {
+                baseTop = window.innerHeight - dropH - margin;
+            }
+
+            dropdown.style.top = `${Math.round(baseTop)}px`;
+            dropdown.style.left = `${Math.round(baseLeft)}px`;
+        }
+
+        async function refresh(ctx) {
+            state.open = true;
+            state.atPos = ctx.atPos;
+            state.query = ctx.query;
+            const seq = ++state.seq;
+            const results = await fetchMentionCandidates(ctx.query);
+            // Drop the response if a newer fetch (or close()) superseded it.
+            if (seq !== state.seq || !state.open) return;
+            state.results = results;
+            state.active = 0;
+            renderList();
+            dropdown.classList.add("open");
+            // Wait one frame so offsetWidth/Height are populated before
+            // measuring — otherwise the first frame snaps to the wrong spot.
+            requestAnimationFrame(() => positionDropdown());
+        }
+
+        function evaluate() {
+            const ctx = detectContext();
+            if (!ctx) {
+                close();
+                return;
+            }
+            // Light debounce so a fast typist's keystrokes coalesce into a
+            // single fetch. 80ms is below the threshold of perceptible lag.
+            if (pendingTimer) clearTimeout(pendingTimer);
+            pendingTimer = setTimeout(() => {
+                pendingTimer = null;
+                refresh(ctx);
+            }, 80);
+        }
+
+        function commit(idx) {
+            const item = state.results[idx];
+            if (!item || !item.sbd) return;
+            const value = input.value;
+            const before = value.slice(0, state.atPos);
+            const afterStart = state.atPos + 1 + state.query.length;
+            const after = value.slice(afterStart);
+            // Insert a trailing space so the next character the user types
+            // does not glue onto the mention. Skip the space if there's
+            // already whitespace right after — avoids double spaces.
+            const needSpace = after.length === 0 || !/^\s/.test(after);
+            const inserted = `@${item.sbd}${needSpace ? " " : ""}`;
+            const newCaret = state.atPos + inserted.length;
+
+            input.focus();
+            input.setSelectionRange(state.atPos, afterStart);
+            let ok = false;
+            try {
+                ok = document.execCommand("insertText", false, inserted);
+            } catch (_) {
+                ok = false;
+            }
+            if (!ok) {
+                input.value = before + inserted + after;
+                input.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+            input.setSelectionRange(newCaret, newCaret);
+            close();
+        }
+
+        // -- Event wiring -----------------------------------------------------
+
+        input.addEventListener("input", evaluate);
+
+        // 'input' alone misses caret-only moves (Left/Right/Home/End). We
+        // re-evaluate on those keys so e.g. clicking back into a typed
+        // mention still surfaces the dropdown.
+        input.addEventListener("keyup", (ev) => {
+            if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(ev.key)) {
+                evaluate();
+            }
+        });
+        input.addEventListener("click", evaluate);
+
+        input.addEventListener("blur", () => {
+            // Defer so a click on a dropdown item can run its mousedown
+            // handler before we tear the dropdown down.
+            setTimeout(() => {
+                if (!dropdown.matches(":hover")) close();
+            }, 120);
+        });
+
+        input.addEventListener("keydown", (ev) => {
+            if (!state.open) return;
+            // Enter / Tab commit the highlighted row IF we have results.
+            // Without results we let the key fall through (Tab moves focus,
+            // Enter submits the form) — same as Messenger.
+            if (ev.key === "ArrowDown" && state.results.length) {
+                ev.preventDefault();
+                state.active = (state.active + 1) % state.results.length;
+                renderList();
+            } else if (ev.key === "ArrowUp" && state.results.length) {
+                ev.preventDefault();
+                state.active = (state.active - 1 + state.results.length) % state.results.length;
+                renderList();
+            } else if ((ev.key === "Enter" || ev.key === "Tab") && state.results.length) {
+                ev.preventDefault();
+                commit(state.active);
+            } else if (ev.key === "Escape") {
+                ev.preventDefault();
+                close();
+            }
+        });
+
+        // Use mousedown — click happens AFTER blur, so by then we've already
+        // closed the dropdown. mousedown lets us commit before blur runs.
+        dropdown.addEventListener("mousedown", (ev) => {
+            const item = ev.target.closest(".mention-item");
+            if (!item) return;
+            ev.preventDefault();
+            const idx = Number(item.dataset.idx);
+            if (Number.isFinite(idx)) commit(idx);
+        });
+
+        // Hover updates the keyboard highlight so arrow-keys pick up where
+        // the mouse left off — small UX nicety, matches Messenger.
+        dropdown.addEventListener("mousemove", (ev) => {
+            const item = ev.target.closest(".mention-item");
+            if (!item) return;
+            const idx = Number(item.dataset.idx);
+            if (!Number.isFinite(idx) || idx === state.active) return;
+            state.active = idx;
+            renderList();
+        });
+
+        // Re-position on scroll (capture mode catches scroll inside any
+        // ancestor — chat list, modal body, etc.) and on resize.
+        window.addEventListener("scroll", () => {
+            if (state.open) positionDropdown();
+        }, true);
+        window.addEventListener("resize", () => {
+            if (state.open) positionDropdown();
+        });
+
+        // If the host form resets (composer after a successful submit), the
+        // input value is cleared programmatically and no 'input' event
+        // fires — so clean up explicitly to avoid a stale dropdown.
+        const hostForm = input.form;
+        if (hostForm) {
+            hostForm.addEventListener("reset", () => setTimeout(close, 0));
+        }
+    }
+
     // Shared markdown-editor actions. Used by both the dashboard composer
     // and the standalone edit-incident page.
     const MD_ACTIONS = {
@@ -1163,11 +1582,29 @@
         ol: (ta) => insertMarkdown(ta, { linePrefix: "1. ", placeholder: "mục", block: true }),
         link: (ta) => insertMarkdown(ta, { before: "[", after: "](url)", placeholder: "văn bản liên kết" }),
         image: (ta) => insertMarkdown(ta, { before: "![", after: "](url)", placeholder: "mô tả ảnh" }),
-        mention: (ta) => insertMarkdown(ta, {
-            placeholder: "TS",
-            selectOffset: 2,
-            selectLength: 0,
-        }),
+        // Mention button: insert the "@" trigger character. The autocomplete
+        // module (bound to the same textarea via bindMentionAutocomplete)
+        // reacts to the 'input' event ``insertTextAt`` emits and pops the
+        // candidate list right above the caret — same path as typing "@"
+        // by hand.
+        //
+        // The server-side rule requires the "@" to sit at start-of-text or
+        // immediately after whitespace; otherwise the regex won't match
+        // ("a@TS123" is intentionally NOT a mention). When the user clicks
+        // this toolbar button while the caret is right after a non-space
+        // character, we silently prepend a space so the resulting "@" is
+        // a real mention trigger and the dropdown actually opens.
+        mention: (ta) => {
+            const start = ta.selectionStart;
+            const end = ta.selectionEnd;
+            const value = ta.value;
+            const charBefore = start > 0 ? value[start - 1] : "";
+            const needLeadingSpace = charBefore && !/\s/.test(charBefore);
+            const insert = needLeadingSpace ? " @" : "@";
+            insertTextAt(ta, insert, start, end);
+            const caret = start + insert.length;
+            ta.setSelectionRange(caret, caret);
+        },
         undo: (ta) => { ta.focus(); document.execCommand("undo"); },
         redo: (ta) => { ta.focus(); document.execCommand("redo"); },
     };
@@ -1180,6 +1617,10 @@
             const target = toolbar.dataset.target ? document.getElementById(toolbar.dataset.target) : null;
             if (!target) return;
             toolbar.dataset.mdBound = "1";
+
+            // Wire @-mention autocomplete to the MD textarea. Idempotent —
+            // calling twice is a no-op thanks to the data-attr guard.
+            bindMentionAutocomplete(target);
 
             toolbar.querySelectorAll(".md-tb-btn[data-action]").forEach((btn) => {
                 btn.addEventListener("click", (event) => {
@@ -1334,6 +1775,11 @@
         composeSbdValidate = attachSbdValidation(sbdInput);
 
         const simpleInput = document.getElementById("id_violation_text_simple");
+        // The simple compose input lives outside the markdown toolbar
+        // initialiser, so wire @-mention autocomplete to it explicitly.
+        // (The expanded MD textarea gets bound via bindMarkdownEditorsIn
+        // a few lines below.)
+        if (simpleInput) bindMentionAutocomplete(simpleInput);
         const fullTextarea = document.getElementById("id_violation_text_full");
         const isMarkdownField = document.getElementById("id_is_markdown");
         const expandBtn = document.getElementById("compose-expand-btn");

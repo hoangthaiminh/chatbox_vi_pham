@@ -11,9 +11,24 @@ MAX_SBD_LENGTH = 9
 MAX_VIOLATION_TEXT_LEN = 2000
 
 _SBD_SYNTAX_RE = re.compile(rf"^[A-Za-z0-9]{{1,{MAX_SBD_LENGTH}}}$")
-# Match TS + 1..N digits up to the max allowed SBD length (reserving 2 chars for 'TS')
-digits_max = max(1, MAX_SBD_LENGTH - 2)
-SBD_PATTERN = re.compile(rf"\b[Tt][Ss]\d{{1,{digits_max}}}\b")
+
+# A "mention" is now strictly an "@SBD" token — a bare "TS123" in free text
+# is NOT a mention. The rules (mirrored on the JS side):
+#
+#   1. The "@" must sit at the very start of the text or immediately after a
+#      whitespace character. "Thí sinh @TS123" matches; "email@TS123" does
+#      not. The negative lookbehind on a non-whitespace character also lets
+#      the start-of-string case (no preceding char) pass.
+#   2. After "@" we capture 1..MAX_SBD_LENGTH alphanumerics. The capture is
+#      what callers actually want (the SBD itself, without the leading
+#      "@"), so ``findall`` returns plain SBD strings.
+#   3. The capture must end at a non-alphanumeric or end-of-string. This
+#      stops a greedy run like "@TS1234567890" (10 alphanumerics) from
+#      being silently truncated to a 9-char prefix — such an over-long run
+#      is simply not a valid SBD mention.
+SBD_PATTERN = re.compile(
+    rf"(?<![^\s])@([A-Za-z0-9]{{1,{MAX_SBD_LENGTH}}})(?![A-Za-z0-9])"
+)
 SBD_TEXT_PATTERN = SBD_PATTERN
 # Kept for backwards compatibility with older call-sites.
 MENTION_TOKEN_PATTERN = re.compile(r"@\{([A-Za-z0-9]{1,9})\}")
