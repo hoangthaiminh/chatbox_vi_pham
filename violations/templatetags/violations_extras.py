@@ -194,11 +194,15 @@ def _id_button_html(sbd):
 
 
 def _highlight_text_fragment(text):
+    # NOTE: SBD_PATTERN now requires a leading "@" and captures only the SBD
+    # part in group(1). match.start()..match.end() spans the whole "@TS123"
+    # so the chip cleanly replaces both the "@" and the code in the rendered
+    # output (no stray "@" left over before the chip).
     fragments = []
     last = 0
     for match in SBD_PATTERN.finditer(text):
         fragments.append(conditional_escape(text[last:match.start()]))
-        normalized = normalize_sbd(match.group(0))
+        normalized = normalize_sbd(match.group(1))
         fragments.append(_id_button_html(normalized))
         last = match.end()
     fragments.append(conditional_escape(text[last:]))
@@ -213,7 +217,7 @@ def highlight_ids(value, autoescape=True):
     escaped_text = str(escape(text))
 
     def repl(match):
-        normalized = normalize_sbd(match.group(0))
+        normalized = normalize_sbd(match.group(1))
         return _id_button_html(normalized)
 
     return mark_safe(SBD_PATTERN.sub(repl, escaped_text))
